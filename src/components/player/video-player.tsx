@@ -1,4 +1,3 @@
-
 // src/components/player/video-player.tsx
 'use client';
 
@@ -29,6 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { YouTubeVideoSearchResultItem } from '@/services/youtube'; // Ensure this type is imported
+import type { PlayerTrackInfo } from '@/store/player-store'; // Ensure PlayerTrackInfo type is imported
 
 export function VideoPlayer() {
    const { user } = useAuth(); // Get user state
@@ -333,4 +333,3 @@ export function VideoPlayer() {
     </div>
   );
 }
-```

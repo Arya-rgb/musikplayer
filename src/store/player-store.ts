@@ -24,7 +24,7 @@ import {
   YouTubeVideoSearchResultItem,
   YouTubeVideoDetailsItem,
 } from '@/services/youtube';
-import { produce } from 'immer';
+import { produce } from 'immer'; // Optional: for easier state updates
 
 // Define Firestore Playlist Structure - Renamed to Playlist for consistency
 export interface Playlist {
@@ -55,7 +55,7 @@ interface PlayerState {
   isRepeating: boolean;
   isShuffling: boolean;
   loading: boolean; // General loading state (search, popular)
-  playlistLoading: Record<string, boolean>; // Loading state per playlist ID or action ('add', 'fetch', 'playlistId')
+  playlistLoading: Record<string, boolean>; // Loading state per playlist ID or action ('add', 'fetch', 'playlistId', 'add_playlistId_videoId', 'remove_playlistId_videoId')
   playlistDetails: Record<string, PlayerTrackInfo>; // Cache for video details by ID
   currentPlaylistVideos: PlayerTrackInfo[]; // Videos currently loaded for the active playlist VIEW
 
@@ -271,7 +271,9 @@ export const usePlayerStore = create<PlayerState>()(
                    state.currentPlaylistVideos = []; // Clear the view
                  }
                  // If the deleted playlist was the current playback queue, stop playback
-                 if (state.currentPlaylist.length > 0 && state.currentPlaylist[0]?.snippet?.channelId === `playlist_${id}`) { // Need a way to identify playlist source
+                 // Need a better way to identify if the current playlist source IS the deleted one
+                 // For now, check if activePlaylistId matches and the queue content is the same
+                 if (state.activePlaylistId === id && state.currentPlaylist.length === state.currentPlaylistVideos.length && state.currentPlaylist.every((track, index) => track.id.videoId === state.currentPlaylistVideos[index]?.id.videoId)) {
                       console.log("Current playback queue was from the deleted playlist, stopping player.");
                       state.currentTrack = null;
                       state.currentPlaylist = [];
@@ -311,10 +313,10 @@ export const usePlayerStore = create<PlayerState>()(
          }
 
          console.log(`Adding video ${videoId} to playlist ${playlistId}`);
+         const addKey = `add_${playlistId}_${videoId}`;
          set(produce((state: PlayerState) => {
-             state.playlistLoading[playlistId] = true;
-             // Also use a specific key for the video add operation if needed
-             state.playlistLoading[`add_${playlistId}_${videoId}`] = true;
+             state.playlistLoading[playlistId] = true; // Indicate playlist is being modified
+             state.playlistLoading[addKey] = true; // Specific operation lock
          }));
 
          try {
@@ -338,7 +340,7 @@ export const usePlayerStore = create<PlayerState>()(
                      if (state.activePlaylistId === playlistId) {
                         // Ensure video details are available before adding
                         const videoWithDetails = state.playlistDetails[videoId] || video;
-                        // Avoid duplicates in the view (shouldn't happen with check above, but belt-and-suspenders)
+                        // Avoid duplicates in the view
                         if (!state.currentPlaylistVideos.some(v => v.id.videoId === videoId)) {
                             state.currentPlaylistVideos.push(videoWithDetails);
                         }
@@ -346,14 +348,12 @@ export const usePlayerStore = create<PlayerState>()(
                   }
                 })
              );
-             // Optionally reload full details after update? Maybe not necessary.
-             // await get().loadPlaylist(playlistId);
           } catch (error) {
               console.error("Failed to add video to playlist:", error);
           } finally {
                 set(produce((state: PlayerState) => {
-                    delete state.playlistLoading[playlistId];
-                    delete state.playlistLoading[`add_${playlistId}_${videoId}`];
+                    delete state.playlistLoading[playlistId]; // Remove general lock maybe? Or keep until all ops are done?
+                    delete state.playlistLoading[addKey]; // Remove specific lock
                 }));
           }
        },
@@ -376,9 +376,10 @@ export const usePlayerStore = create<PlayerState>()(
          }
 
          console.log(`Removing video ${videoId} from playlist ${playlistId}`);
+         const removeKey = `remove_${playlistId}_${videoId}`;
          set(produce((state: PlayerState) => {
              state.playlistLoading[playlistId] = true;
-             state.playlistLoading[`remove_${playlistId}_${videoId}`] = true;
+             state.playlistLoading[removeKey] = true;
           }));
 
          try {
@@ -407,7 +408,7 @@ export const usePlayerStore = create<PlayerState>()(
          } finally {
               set(produce((state: PlayerState) => {
                   delete state.playlistLoading[playlistId];
-                  delete state.playlistLoading[`remove_${playlistId}_${videoId}`];
+                  delete state.playlistLoading[removeKey];
               }));
          }
        },
@@ -755,4 +756,3 @@ export const usePlayerStore = create<PlayerState>()(
 );
 
 // Initial fetch logic moved to onRehydrateStorage callback
-```
