@@ -123,34 +123,43 @@ export function Sidebar() {
            <Skeleton className="h-6 w-24" />
         </div>
         <Skeleton className="h-10 w-full mb-2" /> {/* Skeleton for Search Results */}
+         {/* Add Playlist Skeleton Card - Moved to top */}
+         <Card className="flex items-center justify-start px-3 h-10 gap-2 mb-1 text-muted-foreground border-dashed border-muted-foreground/50 cursor-wait opacity-50">
+             <Plus className="w-4 h-4" />
+             <span>New Playlist</span>
+         </Card>
         <ScrollArea className="flex-1 -mx-4">
            <div className="px-4">
              {renderPlaylistSkeletons(3)}
            </div>
         </ScrollArea>
-        {/* Add Playlist Skeleton Card - Always visible, just disabled/styled differently */}
-        <Card className="flex items-center justify-center p-3 gap-2 mt-auto text-muted-foreground border-dashed border-muted-foreground/50 cursor-wait opacity-50">
-             <Plus className="w-4 h-4" />
-             <span>New Playlist</span>
-         </Card>
     </div>
   );
 
 
    const renderNoAuth = () => (
-      <div className="flex flex-col items-center justify-center h-full text-center p-4">
-        <ListMusic className="w-10 h-10 text-muted-foreground mb-3" />
-        <p className="text-sm text-muted-foreground">Please log in</p>
-        <p className="text-xs text-muted-foreground/70">to manage playlists.</p>
+      <div className="flex flex-col h-full p-4 space-y-2">
+         <div className="flex items-center gap-2 mb-4 p-2">
+           <ListMusic className="w-5 h-5" />
+           <span className="text-lg font-semibold">Playlists</span>
+         </div>
          {/* Keep structure but disabled */}
-         <Dialog open={false}>
+         <Button variant="ghost" className="justify-start w-full mb-1 cursor-not-allowed opacity-50">
+            Search Results
+         </Button>
+          <Dialog open={false}>
              <DialogTrigger asChild>
-                 <Card className="flex items-center justify-center p-3 gap-2 mt-auto text-muted-foreground border-dashed border-muted-foreground/50 cursor-not-allowed w-full">
+                 <Button variant="outline" className="justify-start w-full gap-2 text-muted-foreground border-dashed border-muted-foreground/50 cursor-not-allowed mb-2">
                     <Plus className="w-4 h-4" />
                     <span>New Playlist</span>
-                </Card>
+                </Button>
              </DialogTrigger>
          </Dialog>
+          <div className="flex flex-col items-center justify-center h-full text-center p-4 border-t mt-2">
+            <ListMusic className="w-8 h-8 text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">Please log in</p>
+            <p className="text-xs text-muted-foreground/70">to manage playlists.</p>
+          </div>
       </div>
     );
 
@@ -174,7 +183,71 @@ export function Sidebar() {
            Search Results
          </Button>
 
-         <ScrollArea className="flex-1 -mx-4">
+           {/* Special Button to Add Playlist - Moved to top */}
+            <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
+              <DialogTrigger asChild>
+                  <Button variant="outline" className={cn(
+                     "justify-start w-full gap-2 text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-pointer transition-colors mb-2", // Added margin bottom
+                     (isFetchingPlaylists || isAddingPlaylist) && "opacity-50 cursor-wait" // Dim if playlists are loading initially or adding
+                   )}
+                   disabled={isFetchingPlaylists || isAddingPlaylist} // Disable trigger when loading/adding
+                   >
+                      {isAddingPlaylist ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4" />}
+                      <span>New Playlist</span>
+                  </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Playlist</DialogTitle>
+                  <DialogDescription>
+                    Enter a name for your new playlist.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="playlist-name" className="text-right">
+                      Name
+                    </Label>
+                     <div className="col-span-3 flex items-center gap-2">
+                        <Input
+                          id="playlist-name"
+                          value={newPlaylistName}
+                          onChange={(e) => setNewPlaylistName(e.target.value)}
+                          className="flex-1"
+                          autoFocus
+                          disabled={isAddingPlaylist}
+                          aria-describedby="prepopulate-hint"
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlaylist(); }} // Add playlist on Enter key
+                        />
+                        <Button
+                         variant="ghost"
+                         size="icon"
+                         onClick={handlePrepopulatePlaylistName}
+                         disabled={isAddingPlaylist}
+                         title="Pre-fill name"
+                         aria-label="Pre-fill name"
+                        >
+                          <Wand2 className="w-4 h-4"/>
+                        </Button>
+                     </div>
+                  </div>
+                   <p id="prepopulate-hint" className="text-xs text-muted-foreground col-start-2 col-span-3 pl-1">
+                      Click the magic wand to pre-fill a name.
+                    </p>
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button type="button" variant="secondary" disabled={isAddingPlaylist}>Cancel</Button>
+                  </DialogClose>
+                  <Button type="submit" onClick={handleAddPlaylist} disabled={!newPlaylistName.trim() || isAddingPlaylist}>
+                     {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
+                    Create Playlist
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+          </Dialog>
+
+         <ScrollArea className="flex-1 -mx-4 border-t pt-2"> {/* Added border-t and pt-2 */}
            <div className="px-4 space-y-1">
              {isFetchingPlaylists && playlists.length === 0 ? (
                renderPlaylistSkeletons(3)
@@ -230,69 +303,6 @@ export function Sidebar() {
            </div>
          </ScrollArea>
 
-           {/* Special Card to Add Playlist - Always visible */}
-            <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
-              <DialogTrigger asChild>
-                  <Card className={cn(
-                     "flex items-center justify-center p-3 gap-2 mt-auto text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-pointer transition-colors",
-                     (isFetchingPlaylists || isAddingPlaylist) && "opacity-50 cursor-wait" // Dim if playlists are loading initially or adding
-                   )}
-                   disabled={isFetchingPlaylists || isAddingPlaylist} // Disable trigger when loading/adding
-                   >
-                      {isAddingPlaylist ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4" />}
-                      <span>New Playlist</span>
-                  </Card>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Playlist</DialogTitle>
-                  <DialogDescription>
-                    Enter a name for your new playlist.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="playlist-name" className="text-right">
-                      Name
-                    </Label>
-                     <div className="col-span-3 flex items-center gap-2">
-                        <Input
-                          id="playlist-name"
-                          value={newPlaylistName}
-                          onChange={(e) => setNewPlaylistName(e.target.value)}
-                          className="flex-1"
-                          autoFocus
-                          disabled={isAddingPlaylist}
-                          aria-describedby="prepopulate-hint"
-                        />
-                        <Button
-                         variant="ghost"
-                         size="icon"
-                         onClick={handlePrepopulatePlaylistName}
-                         disabled={isAddingPlaylist}
-                         title="Pre-fill name"
-                         aria-label="Pre-fill name"
-                        >
-                          <Wand2 className="w-4 h-4"/>
-                        </Button>
-                     </div>
-                  </div>
-                   <p id="prepopulate-hint" className="text-xs text-muted-foreground col-start-2 col-span-3 pl-1">
-                      Click the magic wand to pre-fill a name.
-                    </p>
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="secondary" disabled={isAddingPlaylist}>Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit" onClick={handleAddPlaylist} disabled={!newPlaylistName.trim() || isAddingPlaylist}>
-                     {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
-                    Create Playlist
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-          </Dialog>
-
        </div>
    );
 
@@ -311,11 +321,6 @@ export function Sidebar() {
               <SheetTitle className="flex items-center gap-2">
                   <ListMusic className="w-5 h-5"/> Playlists
               </SheetTitle>
-               {/* Removed explicit close button, Sheet Primitive handles it */}
-               {/* <Button variant="ghost" size="icon" onClick={() => setIsMobileSheetOpen(false)} className="absolute top-3 right-3">
-                   <X className="h-5 w-5"/>
-                   <span className="sr-only">Close Menu</span>
-               </Button> */}
             </SheetHeader>
              {authLoading ? renderAuthLoading() : !user ? renderNoAuth() : renderSidebarContent()}
           </SheetContent>
