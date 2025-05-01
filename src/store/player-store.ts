@@ -76,6 +76,7 @@ interface PlayerState {
   addVideoToPlaylist: (video: PlayerTrackInfo, playlistId: string) => Promise<void>; // Now async for Firestore
   removeVideoFromPlaylist: (videoId: string, playlistId: string) => Promise<void>; // Now async for Firestore
   removeVideoFromCurrentPlaylist: (videoId: string, playlistId: string) => Promise<void>; // Removes from Firestore and updates view/player state
+  removeVideoFromSearchResults: (videoId: string) => void; // New action to remove from client-side search results
   playTrack: (track: PlayerTrackInfo, playlist: PlayerTrackInfo[], index: number) => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -280,7 +281,6 @@ export const usePlayerStore = create<PlayerState>()(
                    // Need the original query. This is a limitation. We assume the last search query is still relevant.
                    // A better approach might store the last query in state.
                    // For now, we can't reliably re-run the search without the query.
-                   // Let's assume the UI knows the context (last search query) or we modify searchVideos to store it.
                    // --> Modification: Need to store last search query.
                    console.warn("Fetching next search page requires storing the last query. Feature not fully implemented.");
                    // TODO: Store last search query in state and use it here.
@@ -555,6 +555,36 @@ export const usePlayerStore = create<PlayerState>()(
               } else {
                    console.log(`Video ${videoId} was not in the current playback queue.`);
               }
+          }));
+       },
+
+       removeVideoFromSearchResults: (videoId) => {
+          console.log(`Removing video ${videoId} from search results (client-side).`);
+          set(produce((state: PlayerState) => {
+              state.searchResults = state.searchResults.filter(v => v.id.videoId !== videoId);
+               // Also remove from playback queue if it exists there and originated from search results
+               const removedIndex = state.currentPlaylist.findIndex(track => track.id.videoId === videoId);
+               if (removedIndex !== -1 && state.activePlaylistId === null) { // Only if viewing search results
+                   console.log(`Video ${videoId} was in the current playback queue (from search). Removing...`);
+                   const newPlaylist = state.currentPlaylist.filter(track => track.id.videoId !== videoId);
+                   state.currentPlaylist = newPlaylist;
+
+                   if (state.currentTrackIndex === removedIndex) {
+                       console.log("Removed search result was the currently playing track.");
+                       if (newPlaylist.length === 0) {
+                           state.currentTrack = null;
+                           state.currentTrackIndex = -1;
+                           state.isPlaying = false;
+                       } else {
+                           state.currentTrackIndex = removedIndex % newPlaylist.length;
+                           state.currentTrack = newPlaylist[state.currentTrackIndex];
+                           console.log(`Playing next track from modified search queue: ${state.currentTrack.snippet.title}`);
+                       }
+                   } else if (state.currentTrackIndex > removedIndex) {
+                       state.currentTrackIndex--;
+                       console.log(`Adjusted current track index in search queue to ${state.currentTrackIndex}`);
+                   }
+               }
           }));
        },
 

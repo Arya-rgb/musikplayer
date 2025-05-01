@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Play, Pause, Plus, Trash2, ListMusic, Loader2, ChevronDown } from 'lucide-react'; // Added ChevronDown
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { YouTubeVideoSearchResultItem } from '@/services/youtube';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -30,6 +29,7 @@ export function VideoList() {
     removeVideoFromPlaylist,
     activePlaylistId,
     removeVideoFromCurrentPlaylist,
+    removeVideoFromSearchResults, // Import the new action
     loading,
     playlistDetails,
     playlistLoading,
@@ -54,21 +54,48 @@ export function VideoList() {
 
   const handlePlayVideo = (video: PlayerTrackInfo) => {
     const listToUse = activePlaylistId ? currentPlaylistVideos : searchResults;
-    const playbackList = usePlayerStore.getState().isShuffling ? usePlayerStore.getState().currentPlaylist : listToUse;
+    // Adjust which list is used for playback based on shuffle state
+    const playbackListSource = activePlaylistId ? currentPlaylistVideos : searchResults;
+    const playbackList = usePlayerStore.getState().isShuffling ? shuffleArray(playbackListSource) : playbackListSource;
     const index = playbackList.findIndex(item => item.id.videoId === video.id.videoId);
+
 
     if (index !== -1) {
        console.log(`Playing video "${video.snippet.title}" from ${activePlaylistId ? 'playlist view' : 'search results'} at index ${index}`);
        playTrack(video, playbackList, index);
     } else {
-       console.log(`Playing video "${video.snippet.title}" as single track or starting new queue.`);
+       // This case might happen if the item isn't in the expected list (e.g., after filtering search results)
+       // Fallback: play as a single track or from the unfiltered source if possible
+       console.log(`Playing video "${video.snippet.title}" as single track or potentially starting new queue.`);
        const searchIndex = searchResults.findIndex(item => item.id.videoId === video.id.videoId);
        if (searchIndex !== -1) {
-           playTrack(video, searchResults, searchIndex);
+           // Decide if we should play from the full searchResults or just the single track
+           // Playing from searchResults might be confusing if the user just removed items
+           // Let's play as a single track queue for simplicity after removal.
+           playTrack(video, [video], 0); // Start a new queue with just this track
+           // If you wanted to play from remaining search results:
+           // const currentSearchResults = usePlayerStore.getState().searchResults;
+           // const actualIndexInSearchResults = currentSearchResults.findIndex(item => item.id.videoId === video.id.videoId);
+           // if (actualIndexInSearchResults !== -1) {
+           //    playTrack(video, currentSearchResults, actualIndexInSearchResults);
+           // } else {
+           //    playTrack(video, [video], 0); // Fallback
+           // }
        } else {
-            playTrack(video, [video], 0);
+           // If not even in search results (shouldn't happen if clicking from the list)
+           playTrack(video, [video], 0);
        }
     }
+  };
+
+  // Helper to shuffle array (needed for playTrack logic)
+  const shuffleArray = <T,>(array: T[]): T[] => {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
   };
 
 
@@ -105,6 +132,12 @@ export function VideoList() {
     await removeVideoFromCurrentPlaylist(videoId, activePlaylistId);
   };
 
+  const handleRemoveFromSearchResults = (videoId: string) => {
+    console.log(`Removing video ${videoId} from search results view.`);
+    removeVideoFromSearchResults(videoId);
+    // UI updates automatically via Zustand state change
+  };
+
   const displayVideos = activePlaylistId ? currentPlaylistVideos : searchResults;
   const playlistName = activePlaylistId ? playlists.find(p => p.id === activePlaylistId)?.name : "Search Results";
 
@@ -135,7 +168,8 @@ export function VideoList() {
          {isGeneralLoading && !isFetchingNextPage && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />} {/* Show spinner only for initial load */}
       </h2>
        {/* Adjust height considering header and player height, more reduction on mobile */}
-      <ScrollArea className="h-[calc(100vh-144px-4rem)] md:h-[calc(100vh-160px)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
+       {/* Add extra padding-bottom (pb-28 or more) to ensure "Load More" is visible above the player */}
+      <ScrollArea className="h-[calc(100vh-144px-7rem)] md:h-[calc(100vh-160px-2rem)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-8"> {/* Increased bottom padding */}
         <div className="space-y-2 md:space-y-3">
           {authLoading ? renderSkeleton(8) :
            isGeneralLoading && !isFetchingNextPage ? renderSkeleton(8) : ( // Show skeleton only on initial load
@@ -145,7 +179,7 @@ export function VideoList() {
                     return null;
                 }
                 const videoId = video.id.videoId;
-                const isRemoveLoading = activePlaylistId ? (playlistLoading[activePlaylistId] || playlistLoading[`remove_${activePlaylistId}_${videoId}`]) : false;
+                const isPlaylistRemoveLoading = activePlaylistId ? (playlistLoading[activePlaylistId] || playlistLoading[`remove_${activePlaylistId}_${videoId}`]) : false;
                 const isAddPopoverLoading = playlists.some(p => playlistLoading[`add_${p.id}_${videoId}`] || playlistLoading[`remove_${p.id}_${videoId}`]);
                  const isCurrentPlaying = currentTrack?.id.videoId === videoId;
 
@@ -170,7 +204,7 @@ export function VideoList() {
                     <p className="text-xs sm:text-sm font-medium truncate text-foreground">{video.snippet.title}</p>
                     <p className="text-xs text-muted-foreground truncate hidden sm:block">{video.snippet.channelTitle}</p> {/* Hide channel on very small screens */}
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)} className="h-7 w-7 md:h-8 md:w-8">
+                  <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)} className="h-7 w-7 md:h-8 md:h-8 flex-shrink-0"> {/* Added flex-shrink-0 */}
                      {isCurrentPlaying && isPlaying ? (
                         <Pause className="w-4 h-4 md:w-5 md:h-5 text-accent" />
                       ) : (
@@ -183,7 +217,7 @@ export function VideoList() {
                  {user && (
                      <Popover>
                         <PopoverTrigger asChild>
-                             <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:w-8 text-muted-foreground hover:text-accent" disabled={isAddPopoverLoading} aria-label="Add to Playlist">
+                             <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-accent flex-shrink-0" disabled={isAddPopoverLoading} aria-label="Add to Playlist"> {/* Added flex-shrink-0 */}
                                 {isAddPopoverLoading ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Plus className="w-4 h-4 md:w-5 md:h-5" /> }
                                 <span className="sr-only">Add to Playlist</span>
                              </Button>
@@ -234,15 +268,30 @@ export function VideoList() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 md:h-8 md:w-8 text-muted-foreground hover:text-destructive"
+                        className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-destructive flex-shrink-0" // Added flex-shrink-0
                         onClick={() => handleRemoveFromCurrentPlaylist(videoId)}
                         title="Remove from this playlist"
-                        disabled={isRemoveLoading}
+                        disabled={isPlaylistRemoveLoading}
                       >
-                         {isRemoveLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4" />}
+                         {isPlaylistRemoveLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4" />}
                         <span className="sr-only">Remove from playlist</span>
                       </Button>
                     )}
+
+                    {/* Remove from search results button (only show when not in a playlist view) */}
+                     {!activePlaylistId && (
+                         <Button
+                             variant="ghost"
+                             size="icon"
+                             className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-destructive flex-shrink-0" // Added flex-shrink-0
+                             onClick={() => handleRemoveFromSearchResults(videoId)}
+                             title="Remove from search results"
+                             // No specific loading state needed for this client-side removal
+                         >
+                             <Trash2 className="w-4 h-4" />
+                             <span className="sr-only">Remove from search results</span>
+                         </Button>
+                     )}
 
                 </Card>
                 );
@@ -254,14 +303,14 @@ export function VideoList() {
                     <p className="text-sm md:text-base text-muted-foreground">
                      {activePlaylistId
                         ? (playlists.find(p => p.id === activePlaylistId) ? "This playlist is empty." : "Playlist not found.")
-                        : (loading ? "Loading..." : "No search results.") // Adjust empty state based on loading
+                        : (loading ? "Loading..." : "No search results or popular videos.") // Updated empty state
                      }
                     </p>
                      {!user && !activePlaylistId && (
                          <p className="text-xs md:text-sm text-muted-foreground/70 mt-1">Log in to save videos to playlists.</p>
                      )}
                     <p className="text-xs md:text-sm text-muted-foreground/70 mt-1">
-                       {activePlaylistId ? (user ? "Add some vibes!" : "Log in to add videos.") : "Try searching for a song or artist."}
+                       {activePlaylistId ? (user ? "Add some vibes!" : "Log in to add videos.") : "Try searching for a song or artist, or check out popular videos."}
                     </p>
                 </div>
              )
@@ -293,3 +342,4 @@ export function VideoList() {
     </div>
   );
 }
+
