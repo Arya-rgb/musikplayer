@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card } from '@/components/ui/card'; // Import Card
 
 export function Sidebar() {
   const {
@@ -103,18 +104,16 @@ export function Sidebar() {
            <ListMusic className="w-5 h-5" />
            <Skeleton className="h-6 w-24" />
         </div>
-        <Button variant="secondary" className="justify-start w-full mb-2" disabled>
-          Search Results
-        </Button>
+        <Skeleton className="h-10 w-full mb-2" /> {/* Skeleton for Search Results */}
         <ScrollArea className="flex-1 -mx-4">
            <div className="px-4">
              {renderPlaylistSkeletons(3)}
+              <Card className="flex items-center justify-center p-3 gap-2 mt-2 text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-wait opacity-50">
+                <Plus className="w-4 h-4" />
+                <span>New Playlist</span>
+              </Card>
            </div>
         </ScrollArea>
-         <Button variant="outline" className="w-full mt-auto" disabled>
-             <Loader2 className="w-4 h-4 mr-2 animate-spin"/>
-             Loading Playlists...
-         </Button>
     </div>
   );
 
@@ -123,23 +122,14 @@ export function Sidebar() {
         <ListMusic className="w-10 h-10 text-muted-foreground mb-3" />
         <p className="text-sm text-muted-foreground">Please log in</p>
         <p className="text-xs text-muted-foreground/70">to create and manage your playlists.</p>
-         {/* Keep the button visible but potentially styled differently or disabled */}
-         <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
+         {/* Keep structure but disabled */}
+         <Dialog open={false}>
              <DialogTrigger asChild>
-                 <Button variant="outline" className="w-full mt-6" disabled>
-                     <Plus className="w-4 h-4 mr-2" />
-                     New Playlist
-                 </Button>
+                 <Card className="flex items-center justify-center p-3 gap-2 mt-6 text-muted-foreground border-dashed border-muted-foreground/50 cursor-not-allowed w-full">
+                    <Plus className="w-4 h-4" />
+                    <span>New Playlist</span>
+                </Card>
              </DialogTrigger>
-             {/* Content won't be reachable if disabled, but kept for structure */}
-             <DialogContent className="sm:max-w-[425px]">
-                 <DialogHeader>
-                     <DialogTitle>Log in required</DialogTitle>
-                     <DialogDescription>
-                         You need to be logged in to create playlists.
-                     </DialogDescription>
-                 </DialogHeader>
-             </DialogContent>
          </Dialog>
       </div>
     );
@@ -157,7 +147,7 @@ export function Sidebar() {
        {/* Search Results "Playlist" */}
        <Button
          variant={!activePlaylistId ? 'secondary' : 'ghost'}
-         className="justify-start w-full"
+         className="justify-start w-full mb-1" // Added margin bottom
          onClick={() => handleSelectPlaylist(null)} // Use null for search
        >
          Search Results
@@ -167,7 +157,7 @@ export function Sidebar() {
          <div className="px-4 space-y-1">
            {isFetchingPlaylists && playlists.length === 0 ? (
              renderPlaylistSkeletons(3)
-           ) : playlists.length === 0 ? (
+           ) : playlists.length === 0 && !isFetchingPlaylists ? (
              <p className="text-xs text-muted-foreground px-2 py-4 text-center">No playlists created yet.</p>
            ) : (
              playlists.map((playlist) => playlist?.id ? ( // Check if playlist.id exists
@@ -214,66 +204,70 @@ export function Sidebar() {
              ) : null // Render nothing if playlist.id is missing
             )
            )}
+
+            {/* Special Card to Add Playlist */}
+            {!isFetchingPlaylists && (
+                <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
+                    <DialogTrigger asChild>
+                        <Card className="flex items-center justify-center p-3 gap-2 mt-2 text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-pointer transition-colors">
+                            {isAddingPlaylist ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4" />}
+                            <span>New Playlist</span>
+                        </Card>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Create New Playlist</DialogTitle>
+                        <DialogDescription>
+                          Enter a name for your new playlist.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="playlist-name" className="text-right">
+                            Name
+                          </Label>
+                           <div className="col-span-3 flex items-center gap-2">
+                              <Input
+                                id="playlist-name"
+                                value={newPlaylistName}
+                                onChange={(e) => setNewPlaylistName(e.target.value)}
+                                className="flex-1"
+                                autoFocus
+                                disabled={isAddingPlaylist}
+                                aria-describedby="prepopulate-hint"
+                              />
+                              <Button
+                               variant="ghost"
+                               size="icon"
+                               onClick={handlePrepopulatePlaylistName}
+                               disabled={isAddingPlaylist}
+                               title="Pre-fill name"
+                               aria-label="Pre-fill name"
+                              >
+                                <Wand2 className="w-4 h-4"/>
+                              </Button>
+                           </div>
+                        </div>
+                         <p id="prepopulate-hint" className="text-xs text-muted-foreground col-start-2 col-span-3 pl-1">
+                            Click the magic wand to pre-fill a name.
+                          </p>
+                      </div>
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button type="button" variant="secondary" disabled={isAddingPlaylist}>Cancel</Button>
+                        </DialogClose>
+                        <Button type="submit" onClick={handleAddPlaylist} disabled={!newPlaylistName.trim() || isAddingPlaylist}>
+                           {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
+                          Create Playlist
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
          </div>
        </ScrollArea>
 
-       {/* "New Playlist" Dialog and Trigger */}
-       <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
-         <DialogTrigger asChild>
-           <Button variant="outline" className="w-full mt-auto">
-              {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Plus className="w-4 h-4 mr-2" />}
-             New Playlist
-           </Button>
-         </DialogTrigger>
-         <DialogContent className="sm:max-w-[425px]">
-           <DialogHeader>
-             <DialogTitle>Create New Playlist</DialogTitle>
-             <DialogDescription>
-               Enter a name for your new playlist.
-             </DialogDescription>
-           </DialogHeader>
-           <div className="grid gap-4 py-4">
-             <div className="grid grid-cols-4 items-center gap-4">
-               <Label htmlFor="playlist-name" className="text-right">
-                 Name
-               </Label>
-                <div className="col-span-3 flex items-center gap-2">
-                   <Input
-                     id="playlist-name"
-                     value={newPlaylistName}
-                     onChange={(e) => setNewPlaylistName(e.target.value)}
-                     className="flex-1"
-                     autoFocus
-                     disabled={isAddingPlaylist}
-                     aria-describedby="prepopulate-hint"
-                   />
-                   <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handlePrepopulatePlaylistName}
-                    disabled={isAddingPlaylist}
-                    title="Pre-fill name"
-                    aria-label="Pre-fill name"
-                   >
-                     <Wand2 className="w-4 h-4"/>
-                   </Button>
-                </div>
-             </div>
-              <p id="prepopulate-hint" className="text-xs text-muted-foreground col-start-2 col-span-3 pl-1">
-                 Click the magic wand to pre-fill a name.
-               </p>
-           </div>
-           <DialogFooter>
-             <DialogClose asChild>
-               <Button type="button" variant="secondary" disabled={isAddingPlaylist}>Cancel</Button>
-             </DialogClose>
-             <Button type="submit" onClick={handleAddPlaylist} disabled={!newPlaylistName.trim() || isAddingPlaylist}>
-                {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
-               Create Playlist
-             </Button>
-           </DialogFooter>
-         </DialogContent>
-       </Dialog>
+       {/* REMOVED the old dedicated "New Playlist" button from here */}
      </>
    );
 
@@ -284,4 +278,3 @@ export function Sidebar() {
     </aside>
   );
 }
-
