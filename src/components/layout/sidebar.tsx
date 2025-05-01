@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ListMusic, Plus, Trash2, Loader2, Wand2, Menu, X } from 'lucide-react'; // Added Menu, X
+import { ListMusic, Plus, Trash2, Loader2, Wand2, Menu, X, LoaderCircle } from 'lucide-react'; // Added Menu, X, LoaderCircle
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -117,7 +117,7 @@ export function Sidebar() {
   );
 
   const renderAuthLoading = () => (
-    <div className="flex flex-col h-full p-4 space-y-2">
+     <div className="flex flex-col h-full p-4 space-y-2">
         <div className="flex items-center gap-2 mb-4 p-2">
            <ListMusic className="w-5 h-5" />
            <Skeleton className="h-6 w-24" />
@@ -126,14 +126,16 @@ export function Sidebar() {
         <ScrollArea className="flex-1 -mx-4">
            <div className="px-4">
              {renderPlaylistSkeletons(3)}
-              <Card className="flex items-center justify-center p-3 gap-2 mt-2 text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-wait opacity-50">
-                <Plus className="w-4 h-4" />
-                <span>New Playlist</span>
-              </Card>
            </div>
         </ScrollArea>
+        {/* Add Playlist Skeleton Card - Always visible, just disabled/styled differently */}
+        <Card className="flex items-center justify-center p-3 gap-2 mt-auto text-muted-foreground border-dashed border-muted-foreground/50 cursor-wait opacity-50">
+             <Plus className="w-4 h-4" />
+             <span>New Playlist</span>
+         </Card>
     </div>
   );
+
 
    const renderNoAuth = () => (
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -143,7 +145,7 @@ export function Sidebar() {
          {/* Keep structure but disabled */}
          <Dialog open={false}>
              <DialogTrigger asChild>
-                 <Card className="flex items-center justify-center p-3 gap-2 mt-6 text-muted-foreground border-dashed border-muted-foreground/50 cursor-not-allowed w-full">
+                 <Card className="flex items-center justify-center p-3 gap-2 mt-auto text-muted-foreground border-dashed border-muted-foreground/50 cursor-not-allowed w-full">
                     <Plus className="w-4 h-4" />
                     <span>New Playlist</span>
                 </Card>
@@ -179,7 +181,9 @@ export function Sidebar() {
              ) : playlists.length === 0 && !isFetchingPlaylists ? (
                <p className="text-xs text-muted-foreground px-2 py-4 text-center">No playlists created yet.</p>
              ) : (
-               playlists.map((playlist) => playlist?.id ? ( // Check if playlist.id exists
+               playlists.map((playlist) => {
+                 if (!playlist?.id) return null; // Handle potential missing ID or playlist object
+                 return (
                  <div key={playlist.id} className="flex items-center group">
                    <Button
                      variant={activePlaylistId === playlist.id ? 'secondary' : 'ghost'}
@@ -220,7 +224,7 @@ export function Sidebar() {
                      </AlertDialogContent>
                    </AlertDialog>
                  </div>
-               ) : null // Render nothing if playlist.id is missing
+               )}
               )
              )}
            </div>
@@ -230,9 +234,11 @@ export function Sidebar() {
             <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
               <DialogTrigger asChild>
                   <Card className={cn(
-                     "flex items-center justify-center p-3 gap-2 mt-2 text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-pointer transition-colors",
-                     isFetchingPlaylists && "opacity-50 cursor-wait" // Dim if playlists are still loading initially
-                   )}>
+                     "flex items-center justify-center p-3 gap-2 mt-auto text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-pointer transition-colors",
+                     (isFetchingPlaylists || isAddingPlaylist) && "opacity-50 cursor-wait" // Dim if playlists are loading initially or adding
+                   )}
+                   disabled={isFetchingPlaylists || isAddingPlaylist} // Disable trigger when loading/adding
+                   >
                       {isAddingPlaylist ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4" />}
                       <span>New Playlist</span>
                   </Card>
@@ -300,15 +306,16 @@ export function Sidebar() {
                  <span className="sr-only">Open Menu</span>
              </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0 bg-card text-card-foreground">
+          <SheetContent side="left" className="w-72 p-0 bg-card text-card-foreground flex flex-col"> {/* Use flex col */}
             <SheetHeader className="p-4 border-b">
               <SheetTitle className="flex items-center gap-2">
                   <ListMusic className="w-5 h-5"/> Playlists
               </SheetTitle>
-               <Button variant="ghost" size="icon" onClick={() => setIsMobileSheetOpen(false)} className="absolute top-3 right-3">
+               {/* Removed explicit close button, Sheet Primitive handles it */}
+               {/* <Button variant="ghost" size="icon" onClick={() => setIsMobileSheetOpen(false)} className="absolute top-3 right-3">
                    <X className="h-5 w-5"/>
                    <span className="sr-only">Close Menu</span>
-               </Button>
+               </Button> */}
             </SheetHeader>
              {authLoading ? renderAuthLoading() : !user ? renderNoAuth() : renderSidebarContent()}
           </SheetContent>
