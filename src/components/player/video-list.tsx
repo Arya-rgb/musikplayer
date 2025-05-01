@@ -214,7 +214,7 @@ export function VideoList() {
                   />
                   <div className="flex-1 min-w-0"> {/* Added min-w-0 */}
                     <p
-                       className="text-xs sm:text-sm font-medium truncate text-foreground"
+                       className="text-xs font-medium truncate text-foreground" // Changed text-sm to text-xs
                        title={video.snippet.title} // Show full title on hover
                      >
                        {truncateText(video.snippet.title, 30)} {/* Truncate title to 30 chars */}
