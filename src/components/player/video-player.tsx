@@ -18,7 +18,7 @@ import {
   Shuffle,
   Heart // Assuming Heart is for "Add to Playlist"
 } from 'lucide-react';
-import { formatTime } from '@/lib/utils';
+import { formatTime, cn } from '@/lib/utils'; // Import cn
 import Image from 'next/image';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
