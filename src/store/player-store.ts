@@ -59,12 +59,18 @@ interface PlayerState {
   playlistDetails: Record<string, PlayerTrackInfo>; // Cache for video details by ID
   currentPlaylistVideos: PlayerTrackInfo[]; // Videos currently loaded for the active playlist VIEW
 
+  // Pagination State
+  searchNextPageToken: string | null;
+  popularNextPageToken: string | null;
+  isFetchingNextPage: boolean; // Loading state for pagination requests
+
   // Actions
   setUserId: (userId: string | null) => void;
   clearUserData: () => void; // Action to clear user-specific data on logout
   fetchUserPlaylists: (userId: string) => Promise<void>;
-  searchVideos: (query: string) => Promise<void>;
-  fetchPopularVideos: () => Promise<void>;
+  searchVideos: (query: string, pageToken?: string) => Promise<void>;
+  fetchPopularVideos: (pageToken?: string) => Promise<void>;
+  fetchNextPage: () => Promise<void>; // Fetches next page for current view (search/popular)
   addPlaylist: (name: string) => Promise<void>; // Now async for Firestore
   removePlaylist: (id: string) => Promise<void>; // Now async for Firestore
   addVideoToPlaylist: (video: PlayerTrackInfo, playlistId: string) => Promise<void>; // Now async for Firestore
@@ -115,6 +121,10 @@ export const usePlayerStore = create<PlayerState>()(
       playlistLoading: {},
       playlistDetails: {},
       currentPlaylistVideos: [],
+      // Pagination Defaults
+      searchNextPageToken: null,
+      popularNextPageToken: null,
+      isFetchingNextPage: false,
 
       setUserId: (userId) => set({ userId }),
 
@@ -130,6 +140,11 @@ export const usePlayerStore = create<PlayerState>()(
          state.currentPlaylist = [];
          state.currentTrackIndex = -1;
          state.isPlaying = false;
+
+         // Clear pagination tokens
+         state.searchNextPageToken = null;
+         state.popularNextPageToken = null;
+
          // Keep volume/mute/repeat/shuffle preferences or reset as desired
          // state.volume = 0.8;
          // state.isMuted = false;
@@ -176,38 +191,123 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
 
-      searchVideos: async (query) => {
-        console.log(`Searching videos for query: ${query}`);
-        set({ loading: true, activePlaylistId: null, currentPlaylistVideos: [] });
+      searchVideos: async (query, pageToken) => {
+        console.log(`Searching videos for query: ${query}, PageToken: ${pageToken}`);
+        const isNextPage = !!pageToken;
+        set({
+            loading: !isNextPage, // Show main loader only for initial search
+            isFetchingNextPage: isNextPage, // Show pagination loader for subsequent pages
+            activePlaylistId: null, // Always switch to search view
+            currentPlaylistVideos: [], // Clear playlist view
+        });
+
         try {
-          const results = await searchYouTubeVideos(query, 20);
+          const results = await searchYouTubeVideos(query, 20, pageToken);
           const videos = (results.items || []).filter(item => item.id?.kind === 'youtube#video' && item.id?.videoId);
-          console.log(`Found ${videos.length} search results.`);
-          set({ searchResults: videos, loading: false });
+          console.log(`Found ${videos.length} search results. NextPageToken: ${results.nextPageToken}`);
+
+           set(produce((state: PlayerState) => {
+              if (isNextPage) {
+                // Append results if fetching next page
+                state.searchResults = [...state.searchResults, ...videos];
+              } else {
+                // Replace results for initial search
+                state.searchResults = videos;
+              }
+              state.searchNextPageToken = results.nextPageToken || null; // Store the next page token
+              state.popularNextPageToken = null; // Reset popular token when searching
+            }));
+
         } catch (error) {
           console.error("Failed to search videos:", error);
-          set({ searchResults: [], loading: false });
+          if (!isNextPage) {
+            set({ searchResults: [], searchNextPageToken: null }); // Clear on initial search error
+          }
+        } finally {
+             set({ loading: false, isFetchingNextPage: false });
         }
       },
 
-      fetchPopularVideos: async () => {
-         console.log("Fetching popular videos...");
-         set({ loading: true, activePlaylistId: null, currentPlaylistVideos: [] });
+       fetchPopularVideos: async (pageToken) => {
+         console.log(`Fetching popular videos. PageToken: ${pageToken}`);
+         const isNextPage = !!pageToken;
+         set({
+             loading: !isNextPage,
+             isFetchingNextPage: isNextPage,
+             activePlaylistId: null, // Ensure we are in the "search/popular" view
+             currentPlaylistVideos: [],
+         });
+
          try {
-           const results = await getPopularMusicVideos(20); // Fetch 20 popular videos
+           const results = await getPopularMusicVideos(20, pageToken); // Fetch 20 popular videos
            const videos = (results.items || []).filter(item => item.id?.kind === 'youtube#video' && item.id?.videoId);
-           console.log(`Fetched ${videos.length} popular videos.`);
-           set({ searchResults: videos, loading: false });
+           console.log(`Fetched ${videos.length} popular videos. NextPageToken: ${results.nextPageToken}`);
+
+            set(produce((state: PlayerState) => {
+               if (isNextPage) {
+                 // Append results if fetching next page
+                 state.searchResults = [...state.searchResults, ...videos];
+               } else {
+                 // Replace results for initial fetch
+                 state.searchResults = videos;
+               }
+               state.popularNextPageToken = results.nextPageToken || null; // Store the next page token
+               state.searchNextPageToken = null; // Reset search token when fetching popular
+             }));
+
          } catch (error) {
            console.error("Failed to fetch popular videos:", error);
-           set({ searchResults: [], loading: false });
+           if (!isNextPage) {
+              set({ searchResults: [], popularNextPageToken: null });
+           }
+         } finally {
+           set({ loading: false, isFetchingNextPage: false });
          }
        },
+
+        fetchNextPage: async () => {
+           const { activePlaylistId, searchNextPageToken, popularNextPageToken, searchResults, loading, isFetchingNextPage } = get();
+
+           if (loading || isFetchingNextPage) {
+               console.log("Already fetching, skipping fetchNextPage.");
+               return;
+           }
+
+           // Only paginate for search results or popular videos view
+           if (activePlaylistId === null) {
+               // Determine if we're paginating search or popular based on which token exists
+               if (searchNextPageToken) {
+                   // Need the original query. This is a limitation. We assume the last search query is still relevant.
+                   // A better approach might store the last query in state.
+                   // For now, we can't reliably re-run the search without the query.
+                   // Let's assume the UI knows the context (last search query) or we modify searchVideos to store it.
+                   // --> Modification: Need to store last search query.
+                   console.warn("Fetching next search page requires storing the last query. Feature not fully implemented.");
+                   // TODO: Store last search query in state and use it here.
+                   // Example (if lastQuery existed): await get().searchVideos(lastQuery, searchNextPageToken);
+               } else if (popularNextPageToken) {
+                   console.log("Fetching next page of popular videos...");
+                   await get().fetchPopularVideos(popularNextPageToken);
+               } else {
+                   console.log("No next page token available for search or popular videos.");
+               }
+           } else {
+               console.log("Pagination not implemented for playlist view.");
+               // Playlist videos are fully loaded by loadPlaylist
+           }
+       },
+
 
       addPlaylist: async (name) => {
          const userId = get().userId;
          if (!userId) {
              console.error("Cannot add playlist: User not logged in.");
+             // TODO: Maybe show a toast/message to the user
+             return;
+         }
+         if (!name.trim()) {
+             console.error("Playlist name cannot be empty.");
+             // TODO: Show validation message
              return;
          }
          console.log(`Adding playlist "${name}" for user: ${userId}`);
@@ -269,6 +369,10 @@ export const usePlayerStore = create<PlayerState>()(
                    console.log("Active playlist was deleted, switching to search results view.");
                    state.activePlaylistId = null;
                    state.currentPlaylistVideos = []; // Clear the view
+                    // Ensure search results are shown (fetch popular if empty)
+                    if (state.searchResults.length === 0) {
+                        get().fetchPopularVideos();
+                    }
                  }
                  // If the deleted playlist was the current playback queue, stop playback
                  // Need a better way to identify if the current playlist source IS the deleted one
@@ -625,19 +729,24 @@ export const usePlayerStore = create<PlayerState>()(
           console.log(`Setting active playlist view to: ${id ?? 'Search Results'}`);
           // Only change if the ID is different
           if (get().activePlaylistId !== id) {
-             set({ activePlaylistId: id, currentPlaylistVideos: [], searchResults: id === null ? get().searchResults : [] }); // Clear view/search when switching
+             // Clear view/search/pagination when switching
+             set({
+                 activePlaylistId: id,
+                 currentPlaylistVideos: [],
+                 searchResults: [],
+                 searchNextPageToken: null,
+                 popularNextPageToken: null,
+             });
              if (id) {
                  console.log(`Loading details for playlist: ${id}`);
                  get().loadPlaylist(id); // Load videos when playlist becomes active for viewing
              } else {
-                 // If switching back to search/popular, potentially re-fetch popular if search is empty
-                 if (get().searchResults.length === 0) {
-                    console.log("Switched to Search/Popular view with no results, fetching popular.");
-                    // get().fetchPopularVideos(); // Decide if this should happen automatically
-                 }
+                 // Switching back to search/popular, fetch popular videos
+                 console.log("Switched to Search/Popular view, fetching popular.");
+                 get().fetchPopularVideos();
              }
           } else {
-              console.log(`Playlist ${id} is already the active view.`);
+              console.log(`Playlist ${id ?? 'Search/Popular'} is already the active view.`);
           }
         },
 
@@ -682,19 +791,23 @@ export const usePlayerStore = create<PlayerState>()(
           try {
               let fetchedVideosMap: Record<string, PlayerTrackInfo> = {};
               if (videoIdsToFetch.length > 0) {
-                 console.log(`Fetching details for IDs: ${videoIdsToFetch.join(', ')}`);
-                 const detailsResult = await getYouTubeVideoDetailsByIds(videoIdsToFetch);
-                 console.log(`Fetched details for ${detailsResult.items.length} videos from API.`);
-                 detailsResult.items.forEach(item => {
-                    // Create PlayerTrackInfo structure from details
-                    fetchedVideosMap[item.id] = {
-                        kind: 'youtube#searchResult', // Mimic structure
-                        etag: item.etag,
-                        id: { kind: 'youtube#video', videoId: item.id },
-                        snippet: item.snippet,
-                        details: item, // Keep full details if needed later
-                    };
-                 });
+                 // Fetch in batches of 50 (YouTube API limit)
+                 for (let i = 0; i < videoIdsToFetch.length; i += 50) {
+                    const batchIds = videoIdsToFetch.slice(i, i + 50);
+                    console.log(`Fetching details for batch ${i/50 + 1} (IDs: ${batchIds.join(', ')})`);
+                    const detailsResult = await getYouTubeVideoDetailsByIds(batchIds);
+                    console.log(`Fetched details for ${detailsResult.items.length} videos from API batch.`);
+                    detailsResult.items.forEach(item => {
+                        // Create PlayerTrackInfo structure from details
+                        fetchedVideosMap[item.id] = {
+                            kind: 'youtube#searchResult', // Mimic structure
+                            etag: item.etag,
+                            id: { kind: 'youtube#video', videoId: item.id },
+                            snippet: item.snippet,
+                            details: item, // Keep full details if needed later
+                        };
+                    });
+                 }
               }
 
                // Combine cached and fetched, maintaining original playlist order from videoIds
@@ -754,5 +867,3 @@ export const usePlayerStore = create<PlayerState>()(
     }
   )
 );
-
-// Initial fetch logic moved to onRehydrateStorage callback

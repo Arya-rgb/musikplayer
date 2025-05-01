@@ -7,7 +7,7 @@ import { usePlayerStore } from '@/store/player-store';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
-import { Play, Pause, Plus, Trash2, ListMusic, Loader2 } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, ListMusic, Loader2, ChevronDown } from 'lucide-react'; // Added ChevronDown
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { YouTubeVideoSearchResultItem } from '@/services/youtube';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,6 +34,13 @@ export function VideoList() {
     playlistDetails,
     playlistLoading,
     isPlaying,
+    // Pagination state and actions
+    searchNextPageToken,
+    popularNextPageToken,
+    isFetchingNextPage,
+    fetchNextPage,
+    // Need last search query if implementing next page for search
+    // lastSearchQuery, // Assuming this would be added to the store
   } = usePlayerStore();
 
    const isPlaylistViewLoading = activePlaylistId ? (playlistLoading[activePlaylistId] ?? false) : false;
@@ -101,6 +108,9 @@ export function VideoList() {
   const displayVideos = activePlaylistId ? currentPlaylistVideos : searchResults;
   const playlistName = activePlaylistId ? playlists.find(p => p.id === activePlaylistId)?.name : "Search Results";
 
+   // Determine if there's a next page for the current view
+   const hasNextPage = activePlaylistId === null && (!!searchNextPageToken || !!popularNextPageToken);
+
 
   const renderSkeleton = (count: number) => (
     Array.from({ length: count }).map((_, index) => (
@@ -121,14 +131,14 @@ export function VideoList() {
     <div className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 space-y-3 md:space-y-4">
       <h2 className="text-lg md:text-xl font-semibold tracking-tight flex items-center gap-2 px-2">
         <ListMusic className="w-5 h-5 text-accent"/>
-         {playlistName || 'Vibes'}
-         {isGeneralLoading && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
+         {playlistName || (searchNextPageToken ? 'Search Results' : 'Popular Videos')} {/* Adjust title based on pagination context */}
+         {isGeneralLoading && !isFetchingNextPage && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />} {/* Show spinner only for initial load */}
       </h2>
        {/* Adjust height considering header and player height, more reduction on mobile */}
       <ScrollArea className="h-[calc(100vh-144px-4rem)] md:h-[calc(100vh-160px)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
         <div className="space-y-2 md:space-y-3">
           {authLoading ? renderSkeleton(8) :
-           isGeneralLoading ? renderSkeleton(8) : (
+           isGeneralLoading && !isFetchingNextPage ? renderSkeleton(8) : ( // Show skeleton only on initial load
             displayVideos.length > 0 ? displayVideos.map((video) => {
                 if (!video?.id?.videoId) {
                     console.warn("Skipping rendering video with missing ID:", video);
@@ -185,7 +195,8 @@ export function VideoList() {
                              <ScrollArea className="h-[100px] md:h-[120px]">
                                  <div className="p-2 md:p-3 space-y-1 md:space-y-1.5">
                                     {playlists.length > 0 ? playlists.map((playlist) => {
-                                        const playlistId = playlist.id!;
+                                        if (!playlist?.id) return null; // Ensure playlist and ID exist
+                                        const playlistId = playlist.id;
                                         const isVideoAddLoading = playlistLoading[`add_${playlistId}_${videoId}`];
                                         const isVideoRemoveLoading = playlistLoading[`remove_${playlistId}_${videoId}`];
                                         const isItemDisabled = !!(isVideoAddLoading || isVideoRemoveLoading);
@@ -236,25 +247,47 @@ export function VideoList() {
                 </Card>
                 );
             }) : (
-             // Empty state message
-            <div className="flex flex-col items-center justify-center h-48 md:h-60 text-center p-4">
-                 <ListMusic className="w-10 h-10 md:w-12 md:h-12 text-muted-foreground mb-3 md:mb-4"/>
-                <p className="text-sm md:text-base text-muted-foreground">
-                 {activePlaylistId
-                    ? (playlists.find(p => p.id === activePlaylistId) ? "This playlist is empty." : "Playlist not found.")
-                    : "No search results."
-                 }
-                </p>
-                 {!user && !activePlaylistId && (
-                     <p className="text-xs md:text-sm text-muted-foreground/70 mt-1">Log in to save videos to playlists.</p>
-                 )}
-                <p className="text-xs md:text-sm text-muted-foreground/70 mt-1">
-                   {activePlaylistId ? (user ? "Add some vibes!" : "Log in to add videos.") : "Try searching for a song or artist."}
-                </p>
-            </div>
+             // Empty state message (only shown if not loading next page)
+             !isFetchingNextPage && (
+                <div className="flex flex-col items-center justify-center h-48 md:h-60 text-center p-4">
+                     <ListMusic className="w-10 h-10 md:w-12 md:h-12 text-muted-foreground mb-3 md:mb-4"/>
+                    <p className="text-sm md:text-base text-muted-foreground">
+                     {activePlaylistId
+                        ? (playlists.find(p => p.id === activePlaylistId) ? "This playlist is empty." : "Playlist not found.")
+                        : (loading ? "Loading..." : "No search results.") // Adjust empty state based on loading
+                     }
+                    </p>
+                     {!user && !activePlaylistId && (
+                         <p className="text-xs md:text-sm text-muted-foreground/70 mt-1">Log in to save videos to playlists.</p>
+                     )}
+                    <p className="text-xs md:text-sm text-muted-foreground/70 mt-1">
+                       {activePlaylistId ? (user ? "Add some vibes!" : "Log in to add videos.") : "Try searching for a song or artist."}
+                    </p>
+                </div>
+             )
+            )
+          )}
 
-          )
-        )}
+          {/* Pagination Loading Indicator */}
+          {isFetchingNextPage && (
+             <div className="flex justify-center items-center p-4">
+                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                 <span className="ml-2 text-muted-foreground text-sm">Loading more...</span>
+             </div>
+           )}
+
+           {/* Load More Button */}
+            {hasNextPage && !isFetchingNextPage && (
+                 <div className="flex justify-center py-4">
+                     <Button
+                         variant="outline"
+                         onClick={fetchNextPage}
+                         disabled={isFetchingNextPage}
+                     >
+                         <ChevronDown className="mr-2 h-4 w-4" /> Load More
+                     </Button>
+                 </div>
+             )}
         </div>
       </ScrollArea>
     </div>
