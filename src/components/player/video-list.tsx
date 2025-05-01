@@ -216,7 +216,7 @@ export function VideoList() {
                        className="text-xs sm:text-sm font-medium truncate text-foreground"
                        title={video.snippet.title} // Show full title on hover
                      >
-                       {truncateText(video.snippet.title, 50)} {/* Truncate title to 50 chars */}
+                       {truncateText(video.snippet.title, 30)} {/* Truncate title to 30 chars */}
                      </p>
                     <p className="text-xs text-muted-foreground truncate hidden sm:block">{video.snippet.channelTitle}</p> {/* Hide channel on very small screens */}
                   </div>
@@ -361,5 +361,3 @@ export function VideoList() {
     </div>
   );
 }
-
-    
