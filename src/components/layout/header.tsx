@@ -3,11 +3,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Music, Search, LogOut } from 'lucide-react';
+import { Music, Search, LogOut, LogIn } from 'lucide-react'; // Added LogIn
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePlayerStore } from '@/store/player-store';
-import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { useAuth } from '@/context/auth-context';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -17,11 +17,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+} from '@/components/ui/dialog'; // Import Dialog components
+import { LoginForm } from '@/components/auth/login-form'; // Import LoginForm
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const { searchVideos } = usePlayerStore();
-  const { user, loading, signOut } = useAuth(); // Get user and signOut from context
+  const { user, loading, signOut } = useAuth();
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false); // State for dialog
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,19 +40,28 @@ export function Header() {
     }
   };
 
-   const getInitials = (email?: string | null) => {
-     if (!email) return "?";
-     const parts = email.split('@')[0];
-     return parts.substring(0, 2).toUpperCase();
-   };
+  const getInitials = (email?: string | null) => {
+    if (!email) return "?";
+    const parts = email.split('@')[0];
+    return parts.substring(0, 2).toUpperCase();
+  };
 
+  const handleLoginSuccess = () => {
+    setIsLoginDialogOpen(false); // Close the dialog on successful login
+    // Optional: Add a small delay before reload if needed
+    // setTimeout(() => window.location.reload(), 100);
+    window.location.reload(); // Reload the page to reflect login state
+  };
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6 lg:px-8">
+      {/* Logo and Title */}
       <div className="flex items-center gap-2">
         <Music className="w-6 h-6 text-accent" />
         <h1 className="text-xl font-bold tracking-tight text-foreground">VibeVerse</h1>
       </div>
+
+      {/* Search Form */}
       <form onSubmit={handleSearch} className="flex items-center gap-2 w-full max-w-sm md:max-w-md">
         <Input
           type="search"
@@ -57,9 +76,13 @@ export function Header() {
         </Button>
       </form>
 
-       {/* Auth Section */}
-       <div className="flex items-center gap-4">
-        {!loading && user && (
+      {/* Auth Section */}
+      <div className="flex items-center gap-4">
+        {loading ? (
+          // Optional: Show a loading indicator while checking auth state
+          <div className="text-sm text-muted-foreground">Loading...</div>
+        ) : user ? (
+          // User is logged in - Show User Dropdown
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -79,18 +102,35 @@ export function Header() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {/* Add other menu items here if needed */}
               <DropdownMenuItem onClick={signOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-         )}
-         {/* Optionally show a loading indicator or login button if needed */}
-         {loading && <div>Loading...</div>}
-         {/* {!loading && !user && <Button variant="outline" size="sm">Login</Button>} */}
-       </div>
+        ) : (
+          // User is not logged in - Show Login Button triggering a Dialog
+          <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                 <LogIn className="mr-2 h-4 w-4" />
+                 Login
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Welcome Back</DialogTitle>
+                <DialogDescription>
+                  Sign in to access your VibeVerse.
+                </DialogDescription>
+              </DialogHeader>
+              {/* Render the LoginForm inside the Dialog */}
+              <LoginForm onLoginSuccess={handleLoginSuccess} />
+              {/* Footer can be added inside LoginForm or here */}
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
     </header>
   );
 }

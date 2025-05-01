@@ -43,9 +43,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.log(`User ${firebaseUser.uid} already logged in, playlists likely loaded.`);
         }
 
-        // Set a cookie for middleware detection
+        // Set a cookie for middleware detection (though middleware is simpler now)
         try {
            const token = await firebaseUser.getIdToken();
+           // Setting cookie path to '/'
            Cookies.set('firebaseIdToken', token, { expires: 1, path: '/' });
         } catch (error) {
             console.error("Error getting ID token:", error);
@@ -61,7 +62,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             clearUserData(); // Clear other user-specific data like playlists
         } else {
              console.log("Auth state changed to null, but no user was previously logged in store.");
-             // Ensure search results are loaded if they are empty (initial load or after logout)
+             // Ensure popular videos are loaded if search results are empty (initial load or after logout)
               if (searchResults.length === 0 && !usePlayerStore.getState().loading) {
                  console.log("Fetching popular videos on initial load/logout.");
                  usePlayerStore.getState().fetchPopularVideos();
@@ -82,12 +83,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Auth state listener will handle setting user to null and clearing store data
       // Cookies are removed by the listener as well
       console.log("User signed out successfully via signOut function.");
-      // Force a reload after sign out to ensure clean state
-      window.location.href = '/login'; // Redirect to login page first
-      // The reload might happen too quickly before redirect completes,
-      // so consider if the redirect alone handled by middleware is sufficient.
-      // If reload is strictly required:
-      // setTimeout(() => window.location.reload(), 50); // Small delay
+      // Force a reload after sign out to ensure clean state and UI update
+      // Removed redirect to /login, user stays on current page but UI updates
+      window.location.reload();
     } catch (error) {
       console.error("Error signing out:", error);
     }
@@ -108,3 +106,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
