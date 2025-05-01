@@ -18,7 +18,8 @@ import {
   Repeat,
   Shuffle,
   Heart,
-  Loader2 // Added Loader2
+  Loader2, // Added Loader2
+  Music, // Import Music icon
 } from 'lucide-react';
 import { formatTime, cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -27,6 +28,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { YouTubeVideoSearchResultItem } from '@/services/youtube'; // Ensure this type is imported
 
 export function VideoPlayer() {
    const { user } = useAuth(); // Get user state
@@ -100,10 +102,13 @@ export function VideoPlayer() {
       const isCurrentlyLoading = playlistLoading[playlistId];
       if (isCurrentlyLoading) return; // Prevent action if already loading for this playlist
 
+      // Type guard to ensure currentTrack is PlayerTrackInfo (which includes YouTubeVideoSearchResultItem)
+      const trackToAdd = currentTrack as YouTubeVideoSearchResultItem;
+
       if (checked === true) {
-          await addVideoToPlaylist(currentTrack, playlistId);
+          await addVideoToPlaylist(trackToAdd, playlistId);
       } else {
-          await removeVideoFromPlaylist(currentTrack.id.videoId, playlistId);
+          await removeVideoFromPlaylist(trackToAdd.id.videoId, playlistId);
       }
   };
 
@@ -118,43 +123,6 @@ export function VideoPlayer() {
       return <div className="fixed bottom-0 left-0 right-0 h-24 bg-card border-t z-50 flex items-center justify-center p-4"> <p className="text-muted-foreground">Loading player...</p></div>;
   }
 
-  // Don't render the full player if no track is selected, show minimal info
-  //   if (!currentTrack) {
-  //    return (
-  //      <div className="fixed bottom-0 left-0 right-0 h-24 bg-card border-t z-50 flex items-center justify-between p-4 gap-4">
-  //        <div className="flex items-center gap-3 w-1/4 min-w-0">
-  //            <div className="w-14 h-14 bg-muted rounded flex items-center justify-center">
-  //               <Music className="w-6 h-6 text-muted-foreground"/>
-  //            </div>
-  //          <p className="text-sm text-muted-foreground">No track selected</p>
-  //        </div>
-  //         <div className="flex flex-col items-center justify-center flex-1 max-w-xl gap-2 opacity-50 cursor-not-allowed">
-  //            {/* Disabled Controls */}
-  //           <div className="flex items-center gap-3">
-  //              <Button variant="ghost" size="icon" disabled><Shuffle className="w-5 h-5" /></Button>
-  //              <Button variant="ghost" size="icon" disabled><SkipBack className="w-5 h-5" /></Button>
-  //              <Button variant="default" size="icon" className="w-10 h-10 rounded-full" disabled><Play className="w-5 h-5 fill-current" /></Button>
-  //              <Button variant="ghost" size="icon" disabled><SkipForward className="w-5 h-5" /></Button>
-  //              <Button variant="ghost" size="icon" disabled><Repeat className="w-5 h-5" /></Button>
-  //           </div>
-  //            {/* Disabled Seek Bar */}
-  //           <div className="flex items-center gap-2 w-full">
-  //             <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">00:00</span>
-  //             <Slider value={[0]} max={100} step={0.1} className="flex-1 cursor-not-allowed" disabled />
-  //             <span className="text-xs text-muted-foreground w-10 text-left tabular-nums">00:00</span>
-  //           </div>
-  //         </div>
-  //         <div className="flex items-center gap-3 w-1/4 justify-end opacity-50 cursor-not-allowed">
-  //             {/* Disabled Volume/Other Controls */}
-  //             <Button variant="ghost" size="icon" disabled><Heart className="w-5 h-5" /></Button>
-  //              <div className="flex items-center gap-1">
-  //                 <Button variant="ghost" size="icon" disabled><Volume2 className="w-5 h-5" /></Button>
-  //                 <Slider value={[volume * 100]} max={100} step={1} className="w-20 cursor-not-allowed" disabled />
-  //              </div>
-  //         </div>
-  //      </div>
-  //    );
-  //  }
   // --- Main Player Render ---
   return (
     <div className="fixed bottom-0 left-0 right-0 h-24 bg-card border-t z-50 flex items-center justify-between p-4 gap-4">
@@ -345,4 +313,3 @@ export function VideoPlayer() {
     </div>
   );
 }
-
