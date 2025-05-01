@@ -26,9 +26,6 @@ type LoginFormInputs = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  // Removed searchParams as we always redirect to '/' after login from this page.
-  // const searchParams = useSearchParams();
-  // const redirectedFrom = searchParams.get('redirectedFrom');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -47,15 +44,32 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, data.email, data.password);
       // Auth state change will handle initial data loading via AuthProvider logic.
       // Always redirect to the root path after successful login from the login page.
-       router.push('/');
+      router.push('/');
+      // Force a reload after successful login and navigation
+      // This ensures all context and states are correctly initialized based on the new auth state.
+      window.location.reload();
     } catch (err: any) {
       console.error('Login failed:', err);
-      // More specific error messages
+      // More specific error messages for Firebase v9+
       let errorMessage = 'An unexpected error occurred.';
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      switch (err.code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found': // Still handle just in case, though invalid-credential is more common
+        case 'auth/wrong-password': // Still handle just in case
           errorMessage = 'Invalid email or password.';
-      } else if (err.code === 'auth/invalid-email') {
-           errorMessage = 'Invalid email format.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email format.';
+          break;
+        case 'auth/too-many-requests':
+             errorMessage = 'Access temporarily disabled due to too many failed login attempts. Please try again later.';
+             break;
+        case 'auth/network-request-failed':
+            errorMessage = 'Network error. Please check your internet connection.';
+            break;
+        default:
+          errorMessage = 'Login failed. Please try again.';
+          break;
       }
       setError(errorMessage);
     } finally {
