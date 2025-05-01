@@ -60,6 +60,7 @@ export function VideoPlayer() {
 
   useEffect(() => {
       setIsClient(true); // Component has mounted on the client
+      console.log("Player component mounted on client.");
   }, []);
 
 
@@ -122,6 +123,12 @@ export function VideoPlayer() {
    const displayVideos = activePlaylistId ? currentPlaylistVideos : searchResults;
 
 
+  // Log state changes for debugging
+   useEffect(() => {
+     console.log('Player State Update:', { isPlaying, currentTrack: currentTrack?.snippet.title });
+   }, [isPlaying, currentTrack]);
+
+
   if (!isClient) {
       // Render placeholder or nothing on the server
       return <div className="fixed bottom-0 left-0 right-0 h-24 bg-card border-t z-50 flex items-center justify-center p-4"> <p className="text-muted-foreground">Loading player...</p></div>;
@@ -130,9 +137,10 @@ export function VideoPlayer() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 h-24 bg-card border-t z-50 flex items-center justify-between p-4 gap-4">
-       {/* Hidden ReactPlayer */}
+       {/* Hidden ReactPlayer - Moved off-screen */}
        {currentTrack && (
-         <div className="absolute -top-full opacity-0 pointer-events-none">
+          // Position the player off-screen instead of using opacity/pointer-events
+         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '1px', height: '1px' }}>
             <ReactPlayer
               ref={playerRef}
               url={`https://www.youtube.com/watch?v=${currentTrack.id.videoId}`}
@@ -142,13 +150,21 @@ export function VideoPlayer() {
               onProgress={handleProgress}
               onDuration={handleDuration}
               onEnded={playNext} // Let store handle logic for repeat/shuffle/next
-              width="100%"
-              height="100%"
+              width="1px" // Minimal dimensions might help
+              height="1px"
+              // Debugging callbacks
+              onReady={() => console.log(`Player ready for video: ${currentTrack.snippet.title}`)}
+              onStart={() => console.log(`Player started playing: ${currentTrack.snippet.title}`)}
+              onPlay={() => console.log(`Player event: Play - ${currentTrack.snippet.title}`)}
+              onPause={() => console.log(`Player event: Pause - ${currentTrack.snippet.title}`)}
+              onError={(e, data, hlsInstance, hlsGlobal) => console.error('Player error:', e, data)}
               config={{
                   youtube: {
                       playerVars: {
                           // controls: 0, // Hide native controls if desired
                           // disablekb: 1,
+                          // Ensure autoplay is allowed by browser policies (usually needs user interaction first)
+                          // autoplay: isPlaying ? 1 : 0, // This might conflict with the `playing` prop, better rely on `playing`
                       }
                   }
               }}
@@ -186,12 +202,13 @@ export function VideoPlayer() {
               variant="ghost"
               size="icon"
               onClick={toggleShuffle}
-              className={isShuffling ? 'text-accent' : 'text-muted-foreground'}
+              className={cn(isShuffling ? 'text-accent' : 'text-muted-foreground', !currentTrack && 'opacity-50 cursor-not-allowed')}
               disabled={!currentTrack}
+              aria-label="Toggle shuffle"
             >
               <Shuffle className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={playPrevious} disabled={!currentTrack}>
+          <Button variant="ghost" size="icon" onClick={playPrevious} disabled={!currentTrack} aria-label="Previous track">
             <SkipBack className="w-5 h-5" />
           </Button>
           <Button
@@ -200,18 +217,20 @@ export function VideoPlayer() {
             className="w-10 h-10 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
             onClick={togglePlayPause}
             disabled={!currentTrack}
+             aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={playNext} disabled={!currentTrack}>
+          <Button variant="ghost" size="icon" onClick={playNext} disabled={!currentTrack} aria-label="Next track">
             <SkipForward className="w-5 h-5" />
           </Button>
            <Button
               variant="ghost"
               size="icon"
               onClick={toggleRepeat}
-              className={isRepeating ? 'text-accent' : 'text-muted-foreground'}
+              className={cn(isRepeating ? 'text-accent' : 'text-muted-foreground', !currentTrack && 'opacity-50 cursor-not-allowed')}
               disabled={!currentTrack}
+              aria-label="Toggle repeat"
             >
               <Repeat className="w-5 h-5" />
             </Button>
@@ -244,9 +263,9 @@ export function VideoPlayer() {
          {currentTrack && (
              <Popover>
                 <PopoverTrigger asChild>
-                     <Button variant="ghost" size="icon" className="text-muted-foreground">
+                     <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Add to playlist">
                         <Heart className="w-5 h-5" />
-                        <span className="sr-only">Add to Playlist</span>
+                        {/* <span className="sr-only">Add to Playlist</span> */}
                      </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-60 p-0">
@@ -258,14 +277,14 @@ export function VideoPlayer() {
                             {playlists.length > 0 ? playlists.map((playlist) => (
                                 <div key={playlist.id} className="flex items-center space-x-2">
                                     <Checkbox
-                                      id={`playlist-${playlist.id}`}
+                                      id={`player-playlist-${playlist.id}`} // Ensure unique ID
                                       checked={isVideoInPlaylist(currentTrack.id.videoId, playlist.id)}
                                       onCheckedChange={(checked) => handlePlaylistCheckboxChange(playlist.id, checked)}
-                                      aria-labelledby={`label-playlist-${playlist.id}`}
+                                      aria-labelledby={`label-player-playlist-${playlist.id}`}
                                     />
                                     <Label
-                                        htmlFor={`playlist-${playlist.id}`}
-                                        id={`label-playlist-${playlist.id}`}
+                                        htmlFor={`player-playlist-${playlist.id}`}
+                                        id={`label-player-playlist-${playlist.id}`}
                                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 truncate"
                                     >
                                         {playlist.name}
@@ -283,9 +302,9 @@ export function VideoPlayer() {
 
         {/* Volume Control */}
          <div className="flex items-center gap-1" onMouseEnter={() => setShowVolumeSlider(true)} onMouseLeave={() => setShowVolumeSlider(false)}>
-            <Button variant="ghost" size="icon" onClick={toggleMute} className="text-muted-foreground">
+            <Button variant="ghost" size="icon" onClick={toggleMute} className="text-muted-foreground" aria-label={isMuted ? 'Unmute' : 'Mute'}>
               {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-               <span className="sr-only">{isMuted ? 'Unmute' : 'Mute'}</span>
+               {/* <span className="sr-only">{isMuted ? 'Unmute' : 'Mute'}</span> */}
             </Button>
             <Slider
               value={[isMuted ? 0 : volume * 100]}
