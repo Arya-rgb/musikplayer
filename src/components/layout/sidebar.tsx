@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ListMusic, Plus, Trash2, Loader2, Wand2, Menu, X, LoaderCircle } from 'lucide-react'; // Added Menu, X, LoaderCircle
+import { ListMusic, Plus, Trash2, Loader2, Menu, X, LoaderCircle } from 'lucide-react'; // Removed Wand2
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -94,10 +94,6 @@ export function Sidebar() {
       // usePlayerStore.setState({ currentPlaylistVideos: [] });
     }
      if (isMobile) setIsMobileSheetOpen(false); // Close sheet on mobile after selection
-  };
-
-  const handlePrepopulatePlaylistName = () => {
-    setNewPlaylistName("My Awesome Playlist");
   };
 
    const handleDeletePlaylist = async (playlistId: string) => {
@@ -208,32 +204,20 @@ export function Sidebar() {
                     <Label htmlFor="playlist-name" className="text-right">
                       Name
                     </Label>
-                     <div className="col-span-3 flex items-center gap-2">
+                     <div className="col-span-3"> {/* Removed flex items-center gap-2 */}
                         <Input
                           id="playlist-name"
                           value={newPlaylistName}
                           onChange={(e) => setNewPlaylistName(e.target.value)}
-                          className="flex-1"
+                          className="w-full" // Ensure input takes full width
                           autoFocus
                           disabled={isAddingPlaylist}
-                          aria-describedby="prepopulate-hint"
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlaylist(); }} // Add playlist on Enter key
                         />
-                        <Button
-                         variant="ghost"
-                         size="icon"
-                         onClick={handlePrepopulatePlaylistName}
-                         disabled={isAddingPlaylist}
-                         title="Pre-fill name"
-                         aria-label="Pre-fill name"
-                        >
-                          <Wand2 className="w-4 h-4"/>
-                        </Button>
+                        {/* Removed pre-fill button */}
                      </div>
                   </div>
-                   <p id="prepopulate-hint" className="text-xs text-muted-foreground col-start-2 col-span-3 pl-1">
-                      Click the magic wand to pre-fill a name.
-                    </p>
+                   {/* Removed pre-fill hint paragraph */}
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>
@@ -336,4 +320,3 @@ export function Sidebar() {
     </aside>
   );
 }
-
