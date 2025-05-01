@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 // List of public paths that don't require authentication
 const PUBLIC_FILE = /\.(.*)$/; // Files (like images) in the public folder
-const PUBLIC_PATHS = ['/login']; // Add any other public paths here
+const PUBLIC_PATHS = ['/login']; // Login is the only public route
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,24 +18,24 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/static') ||
     PUBLIC_FILE.test(pathname)
   ) {
+    // If user is authenticated and tries to access login page, redirect to home
+    if (sessionCookie && pathname === '/login') {
+       return NextResponse.redirect(new URL('/', request.url));
+    }
+    // Otherwise, allow access to public path
     return NextResponse.next();
   }
 
   // If trying to access a protected route without a session, redirect to login
-  if (!sessionCookie && !PUBLIC_PATHS.includes(pathname)) {
+  if (!sessionCookie) {
     const loginUrl = new URL('/login', request.url);
-    // Optionally add the intended destination as a query parameter
+    // Optionally add the intended destination as a query parameter for future use,
+    // but the login page currently always redirects to '/'
     // loginUrl.searchParams.set('redirectedFrom', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // If user is authenticated and tries to access login page, redirect to home
-  if (sessionCookie && pathname === '/login') {
-     return NextResponse.redirect(new URL('/', request.url));
-  }
-
-
-  // Allow the request to proceed if authenticated or accessing a public path
+  // Allow the request to proceed if authenticated and accessing a protected route
   return NextResponse.next();
 }
 
@@ -48,10 +48,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * But apply to the root path ('/') and login ('/login').
+     * Apply to the root path ('/') and login ('/login') and any other potential paths.
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
-     '/',
-     '/login',
   ],
 };

@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase/client';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Removed useSearchParams
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,8 +26,9 @@ type LoginFormInputs = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-   const searchParams = useSearchParams();
-  const redirectedFrom = searchParams.get('redirectedFrom');
+  // Removed searchParams as we always redirect to '/' after login from this page.
+  // const searchParams = useSearchParams();
+  // const redirectedFrom = searchParams.get('redirectedFrom');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -44,9 +45,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, data.email, data.password);
-      // Auth state change will handle redirection via middleware or AuthProvider logic
-      // If direct redirect is needed:
-       router.push(redirectedFrom || '/'); // Redirect to intended page or home
+      // Auth state change will handle initial data loading via AuthProvider logic.
+      // Always redirect to the root path after successful login from the login page.
+       router.push('/');
     } catch (err: any) {
       console.error('Login failed:', err);
       // More specific error messages
@@ -63,6 +64,7 @@ export default function LoginPage() {
   };
 
   return (
+    // Ensure this container doesn't conflict with RootLayout styles if login is standalone
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-secondary/30 p-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
