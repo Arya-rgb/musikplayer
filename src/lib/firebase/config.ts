@@ -22,7 +22,14 @@ export const firebaseConfig = {
 
 // Basic validation to ensure config is loaded
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  // Avoid logging sensitive info like the key itself in warnings
+  if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    console.warn('Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is missing in .env.local');
+  }
+   if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+    console.warn('Firebase Project ID (NEXT_PUBLIC_FIREBASE_PROJECT_ID) is missing in .env.local');
+  }
   console.warn(
-    'Firebase configuration is incomplete. Please check your environment variables.'
+    'Firebase configuration might be incomplete. Please check your environment variables in .env.local.'
   );
 }
