@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Music, Search, LogOut, LogIn } from 'lucide-react'; // Added LogIn
+import { Music, Search, LogOut, LogIn } from 'lucide-react'; // Keep needed icons
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePlayerStore } from '@/store/player-store';
@@ -24,14 +24,16 @@ import {
   DialogTitle,
   DialogDescription,
   DialogTrigger,
-} from '@/components/ui/dialog'; // Import Dialog components
-import { LoginForm } from '@/components/auth/login-form'; // Import LoginForm
+} from '@/components/ui/dialog';
+import { LoginForm } from '@/components/auth/login-form';
+// Removed useIsMobile and related Sheet imports/logic
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const { searchVideos } = usePlayerStore();
   const { user, loading, signOut } = useAuth();
   const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false); // State for dialog
+  // Removed isMobile and sheet state/logic
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,42 +49,40 @@ export function Header() {
   };
 
   const handleLoginSuccess = () => {
-    setIsLoginDialogOpen(false); // Close the dialog on successful login
-    // Optional: Add a small delay before reload if needed
-    // setTimeout(() => window.location.reload(), 100);
-    window.location.reload(); // Reload the page to reflect login state
+    setIsLoginDialogOpen(false);
+    window.location.reload();
   };
 
   return (
-    <header className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6 lg:px-8">
-      {/* Logo and Title */}
-      <div className="flex items-center gap-2">
+    <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6 lg:px-8 h-16"> {/* Fixed height */}
+      {/* Mobile Sidebar Trigger (now handled within Sidebar component) - Removed button here */}
+
+      {/* Logo and Title - Add padding for mobile menu button space */}
+      <div className="flex items-center gap-2 pl-10 md:pl-0"> {/* Add pl-10 for mobile, md:pl-0 for desktop */}
         <Music className="w-6 h-6 text-accent" />
-        <h1 className="text-xl font-bold tracking-tight text-foreground">VibeVerse</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground hidden sm:block">VibeVerse</h1> {/* Hide title on very small screens */}
       </div>
 
       {/* Search Form */}
-      <form onSubmit={handleSearch} className="flex items-center gap-2 w-full max-w-sm md:max-w-md">
+      <form onSubmit={handleSearch} className="flex items-center gap-2 w-full max-w-xs sm:max-w-sm md:max-w-md mx-auto px-2"> {/* Centered search, adjusted width */}
         <Input
           type="search"
-          placeholder="Search for music..."
-          className="flex-1"
+          placeholder="Search..." // Shorter placeholder
+          className="flex-1 h-9" // Smaller height
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
-        <Button type="submit" size="icon" variant="ghost">
+        <Button type="submit" size="icon" variant="ghost" className="h-9 w-9"> {/* Smaller button */}
           <Search className="w-5 h-5" />
           <span className="sr-only">Search</span>
         </Button>
       </form>
 
       {/* Auth Section */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4"> {/* Reduced gap */}
         {loading ? (
-          // Optional: Show a loading indicator while checking auth state
-          <div className="text-sm text-muted-foreground">Loading...</div>
+          <div className="text-xs sm:text-sm text-muted-foreground">Loading...</div>
         ) : user ? (
-          // User is logged in - Show User Dropdown
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -109,12 +109,11 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          // User is not logged in - Show Login Button triggering a Dialog
           <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
-                 <LogIn className="mr-2 h-4 w-4" />
-                 Login
+                 <LogIn className="mr-1.5 h-4 w-4" /> {/* Adjusted margin */}
+                 <span className="hidden sm:inline">Login</span> {/* Hide text on small screens */}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
@@ -124,9 +123,7 @@ export function Header() {
                   Sign in to access your VibeVerse.
                 </DialogDescription>
               </DialogHeader>
-              {/* Render the LoginForm inside the Dialog */}
               <LoginForm onLoginSuccess={handleLoginSuccess} />
-              {/* Footer can be added inside LoginForm or here */}
             </DialogContent>
           </Dialog>
         )}
