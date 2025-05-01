@@ -17,6 +17,15 @@ import { useAuth } from '@/context/auth-context';
 import type { PlayerTrackInfo } from '@/store/player-store';
 import { cn } from '@/lib/utils'; // Import cn
 
+// Function to truncate text
+const truncateText = (text: string, maxLength: number): string => {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return text.substring(0, maxLength) + '...';
+};
+
+
 export function VideoList() {
    const { user, loading: authLoading } = useAuth();
   const {
@@ -148,14 +157,16 @@ export function VideoList() {
   const renderSkeleton = (count: number) => (
     Array.from({ length: count }).map((_, index) => (
       <Card key={`skeleton-${index}`} className="flex items-center p-2 md:p-3 gap-2 md:gap-3 bg-card/50">
-        <Skeleton className="w-16 h-12 md:w-20 md:h-14 rounded" />
-        <div className="flex-1 space-y-1 md:space-y-2">
+        <Skeleton className="w-16 h-12 md:w-20 md:h-14 rounded flex-shrink-0" /> {/* Added flex-shrink-0 */}
+        <div className="flex-1 space-y-1 md:space-y-2 min-w-0"> {/* Added min-w-0 */}
           <Skeleton className="h-3 w-3/4" />
           <Skeleton className="h-3 w-1/2" />
         </div>
-        <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full" />
-        {user && <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full" />}
-         {user && activePlaylistId && <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full" />}
+        <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full flex-shrink-0" /> {/* Added flex-shrink-0 */}
+        {user && <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full flex-shrink-0" />} {/* Added flex-shrink-0 */}
+         {user && activePlaylistId && <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full flex-shrink-0" />} {/* Added flex-shrink-0 */}
+          {/* Skeleton for remove button in search results */}
+         {!activePlaylistId && <Skeleton className="w-7 h-7 md:w-8 md:h-8 rounded-full flex-shrink-0" />} {/* Added flex-shrink-0 */}
       </Card>
     ))
   );
@@ -169,7 +180,7 @@ export function VideoList() {
       </h2>
        {/* Adjust height considering header and player height, more reduction on mobile */}
        {/* Add extra padding-bottom (pb-28 or more) to ensure "Load More" is visible above the player */}
-      <ScrollArea className="h-[calc(100vh-144px-7rem)] md:h-[calc(100vh-160px-2rem)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-8"> {/* Increased bottom padding */}
+      <ScrollArea className="h-[calc(100vh-144px-7rem)] md:h-[calc(100vh-160px-2rem)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-32 md:pb-28"> {/* Increased bottom padding */}
         <div className="space-y-2 md:space-y-3">
           {authLoading ? renderSkeleton(8) :
            isGeneralLoading && !isFetchingNextPage ? renderSkeleton(8) : ( // Show skeleton only on initial load
@@ -197,101 +208,109 @@ export function VideoList() {
                     alt={video.snippet.title}
                     width={64} // Smaller on mobile
                     height={48} // Smaller on mobile
-                    className="rounded object-cover aspect-video"
+                    className="rounded object-cover aspect-video flex-shrink-0" // Added flex-shrink-0
                     data-ai-hint="music video thumbnail small"
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm font-medium truncate text-foreground">{video.snippet.title}</p>
+                  <div className="flex-1 min-w-0"> {/* Added min-w-0 */}
+                    <p
+                       className="text-xs sm:text-sm font-medium truncate text-foreground"
+                       title={video.snippet.title} // Show full title on hover
+                     >
+                       {truncateText(video.snippet.title, 20)} {/* Truncate title */}
+                     </p>
                     <p className="text-xs text-muted-foreground truncate hidden sm:block">{video.snippet.channelTitle}</p> {/* Hide channel on very small screens */}
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)} className="h-7 w-7 md:h-8 md:h-8 flex-shrink-0"> {/* Added flex-shrink-0 */}
-                     {isCurrentPlaying && isPlaying ? (
-                        <Pause className="w-4 h-4 md:w-5 md:h-5 text-accent" />
-                      ) : (
-                         <Play className="w-4 h-4 md:w-5 md:h-5 text-accent fill-current" />
-                      )}
-                    <span className="sr-only">Play</span>
-                  </Button>
-
-                 {/* Add to Playlist Popover */}
-                 {user && (
-                     <Popover>
-                        <PopoverTrigger asChild>
-                             <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-accent flex-shrink-0" disabled={isAddPopoverLoading} aria-label="Add to Playlist"> {/* Added flex-shrink-0 */}
-                                {isAddPopoverLoading ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Plus className="w-4 h-4 md:w-5 md:h-5" /> }
-                                <span className="sr-only">Add to Playlist</span>
-                             </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-52 p-0 mb-2"> {/* Added margin bottom */}
-                             <div className="p-2 md:p-3 border-b">
-                                 <p className="text-sm font-medium">Add to playlist</p>
-                             </div>
-                             <ScrollArea className="h-[100px] md:h-[120px]">
-                                 <div className="p-2 md:p-3 space-y-1 md:space-y-1.5">
-                                    {playlists.length > 0 ? playlists.map((playlist) => {
-                                        if (!playlist?.id) return null; // Ensure playlist and ID exist
-                                        const playlistId = playlist.id;
-                                        const isVideoAddLoading = playlistLoading[`add_${playlistId}_${videoId}`];
-                                        const isVideoRemoveLoading = playlistLoading[`remove_${playlistId}_${videoId}`];
-                                        const isItemDisabled = !!(isVideoAddLoading || isVideoRemoveLoading);
-                                        return (
-                                        <div key={playlistId} className="flex items-center space-x-2">
-                                            <Checkbox
-                                              id={`pop-${videoId}-${playlistId}`}
-                                              checked={isVideoInPlaylist(videoId, playlistId)}
-                                              onCheckedChange={(checked) => handlePlaylistCheckboxChange(video, playlistId, checked)}
-                                              aria-labelledby={`label-pop-${videoId}-${playlistId}`}
-                                              disabled={isItemDisabled}
-                                            />
-                                            <Label
-                                                htmlFor={`pop-${videoId}-${playlistId}`}
-                                                id={`label-pop-${videoId}-${playlistId}`}
-                                                className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 truncate"
-                                            >
-                                                {(isVideoAddLoading || isVideoRemoveLoading) && <Loader2 className="w-3 h-3 mr-1 inline-block animate-spin"/>}
-                                                {playlist.name}
-                                            </Label>
-                                        </div>
-                                        );
-                                    }) : (
-                                        <p className="text-xs text-muted-foreground text-center px-2 py-1">No playlists yet.</p>
-                                    )}
-                                 </div>
-                            </ScrollArea>
-                        </PopoverContent>
-                    </Popover>
-                 )}
-
-
-                  {/* Remove from current playlist button */}
-                   {user && activePlaylistId && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-destructive flex-shrink-0" // Added flex-shrink-0
-                        onClick={() => handleRemoveFromCurrentPlaylist(videoId)}
-                        title="Remove from this playlist"
-                        disabled={isPlaylistRemoveLoading}
-                      >
-                         {isPlaylistRemoveLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4" />}
-                        <span className="sr-only">Remove from playlist</span>
+                  {/* Buttons Container - Flex shrink 0 to prevent buttons wrapping */}
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                      <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)} className="h-7 w-7 md:h-8 md:h-8">
+                         {isCurrentPlaying && isPlaying ? (
+                            <Pause className="w-4 h-4 md:w-5 md:h-5 text-accent" />
+                          ) : (
+                             <Play className="w-4 h-4 md:w-5 md:h-5 text-accent fill-current" />
+                          )}
+                        <span className="sr-only">Play</span>
                       </Button>
-                    )}
 
-                    {/* Remove from search results button (only show when not in a playlist view) */}
-                     {!activePlaylistId && (
-                         <Button
-                             variant="ghost"
-                             size="icon"
-                             className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-destructive flex-shrink-0" // Added flex-shrink-0
-                             onClick={() => handleRemoveFromSearchResults(videoId)}
-                             title="Remove from search results"
-                             // No specific loading state needed for this client-side removal
-                         >
-                             <Trash2 className="w-4 h-4" />
-                             <span className="sr-only">Remove from search results</span>
-                         </Button>
+                     {/* Add to Playlist Popover */}
+                     {user && (
+                         <Popover>
+                            <PopoverTrigger asChild>
+                                 <Button variant="ghost" size="icon" className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-accent" disabled={isAddPopoverLoading} aria-label="Add to Playlist">
+                                    {isAddPopoverLoading ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Plus className="w-4 h-4 md:w-5 md:h-5" /> }
+                                    <span className="sr-only">Add to Playlist</span>
+                                 </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-52 p-0 mb-2"> {/* Added margin bottom */}
+                                 <div className="p-2 md:p-3 border-b">
+                                     <p className="text-sm font-medium">Add to playlist</p>
+                                 </div>
+                                 <ScrollArea className="h-[100px] md:h-[120px]">
+                                     <div className="p-2 md:p-3 space-y-1 md:space-y-1.5">
+                                        {playlists.length > 0 ? playlists.map((playlist) => {
+                                            if (!playlist?.id) return null; // Ensure playlist and ID exist
+                                            const playlistId = playlist.id;
+                                            const isVideoAddLoading = playlistLoading[`add_${playlistId}_${videoId}`];
+                                            const isVideoRemoveLoading = playlistLoading[`remove_${playlistId}_${videoId}`];
+                                            const isItemDisabled = !!(isVideoAddLoading || isVideoRemoveLoading);
+                                            return (
+                                            <div key={playlistId} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                  id={`pop-${videoId}-${playlistId}`}
+                                                  checked={isVideoInPlaylist(videoId, playlistId)}
+                                                  onCheckedChange={(checked) => handlePlaylistCheckboxChange(video, playlistId, checked)}
+                                                  aria-labelledby={`label-pop-${videoId}-${playlistId}`}
+                                                  disabled={isItemDisabled}
+                                                />
+                                                <Label
+                                                    htmlFor={`pop-${videoId}-${playlistId}`}
+                                                    id={`label-pop-${videoId}-${playlistId}`}
+                                                    className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 truncate"
+                                                >
+                                                    {(isVideoAddLoading || isVideoRemoveLoading) && <Loader2 className="w-3 h-3 mr-1 inline-block animate-spin"/>}
+                                                    {playlist.name}
+                                                </Label>
+                                            </div>
+                                            );
+                                        }) : (
+                                            <p className="text-xs text-muted-foreground text-center px-2 py-1">No playlists yet.</p>
+                                        )}
+                                     </div>
+                                </ScrollArea>
+                            </PopoverContent>
+                        </Popover>
                      )}
+
+
+                      {/* Remove from current playlist button */}
+                       {user && activePlaylistId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleRemoveFromCurrentPlaylist(videoId)}
+                            title="Remove from this playlist"
+                            disabled={isPlaylistRemoveLoading}
+                          >
+                             {isPlaylistRemoveLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4" />}
+                            <span className="sr-only">Remove from playlist</span>
+                          </Button>
+                        )}
+
+                        {/* Remove from search results button (only show when not in a playlist view) */}
+                         {!activePlaylistId && (
+                             <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 className="h-7 w-7 md:h-8 md:h-8 text-muted-foreground hover:text-destructive"
+                                 onClick={() => handleRemoveFromSearchResults(videoId)}
+                                 title="Remove from search results"
+                                 // No specific loading state needed for this client-side removal
+                             >
+                                 <Trash2 className="w-4 h-4" />
+                                 <span className="sr-only">Remove from search results</span>
+                             </Button>
+                         )}
+                  </div>
 
                 </Card>
                 );
@@ -343,3 +362,5 @@ export function VideoList() {
   );
 }
 
+
+    
