@@ -17,11 +17,11 @@ import {
   // ListMusic, // Example, uncomment if queue feature is added
   Repeat,
   Shuffle,
-  Heart,
-  Loader2, // Added Loader2
-  Music, // Import Music icon
+  Plus, // Replaced Heart with Plus
+  Loader2,
+  Music,
 } from 'lucide-react';
-import { formatTime, cn } from '@/lib/utils';
+import { formatTime, cn } from '@/lib/utils'; // Import cn
 import Image from 'next/image';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -42,8 +42,7 @@ export function VideoPlayer() {
     togglePlayPause,
     setVolume,
     toggleMute,
-    // currentPlaylistVideos, // Not directly needed here, handled by playTrack/Next/Prev
-    // playTrack, // Not directly needed here
+    // currentPlaylist, // Use state.currentPlaylist inside actions if needed
     isRepeating,
     toggleRepeat,
     isShuffling,
@@ -51,8 +50,6 @@ export function VideoPlayer() {
     playlists, // Firestore playlists
     addVideoToPlaylist, // Async Firestore action
     removeVideoFromPlaylist, // Async Firestore action
-    // searchResults, // Not needed here
-    // activePlaylistId, // Not needed here
     playlistLoading // Loading states for playlist operations
   } = usePlayerStore();
 
@@ -63,10 +60,10 @@ export function VideoPlayer() {
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
-   // General loading state for any playlist update from this component
-   const isUpdatingPlaylist = Object.entries(playlistLoading)
-       .filter(([key]) => key !== 'fetch' && key !== 'add') // Exclude general fetch/add from sidebar
-       .some(([, value]) => value);
+   // Check if any playlist ADD/REMOVE operation is in progress for the current track
+   const isUpdatingCurrentTrackPlaylists = currentTrack ? Object.entries(playlistLoading).some(([key, value]) =>
+       value && (key.includes(`_${currentTrack.id.videoId}`) || key === 'add') // Check specific video locks or general add lock
+   ) : false;
 
 
   useEffect(() => {
@@ -96,23 +93,37 @@ export function VideoPlayer() {
     if (!isMuted && newVolume === 0) toggleMute();
   };
 
-  // Playlist add/remove logic (using Firestore actions)
+  // Playlist add/remove logic for the current track (using Firestore actions)
    const handlePlaylistCheckboxChange = async (playlistId: string, checked: boolean | 'indeterminate') => {
-      if (!currentTrack || !user) return; // Need track and user
-      const isCurrentlyLoading = playlistLoading[playlistId];
-      if (isCurrentlyLoading) return; // Prevent action if already loading for this playlist
+      if (!currentTrack || !user) {
+          console.log("Cannot add/remove: No current track or user not logged in.");
+          return;
+      }
 
-      // Type guard to ensure currentTrack is PlayerTrackInfo (which includes YouTubeVideoSearchResultItem)
-      const trackToAdd = currentTrack as YouTubeVideoSearchResultItem;
+      const videoId = currentTrack.id.videoId;
+      const addKey = `add_${playlistId}_${videoId}`;
+      const removeKey = `remove_${playlistId}_${videoId}`;
+      const isCurrentlyLoading = playlistLoading[addKey] || playlistLoading[removeKey];
 
+      if (isCurrentlyLoading) {
+          console.log(`Operation for track ${videoId} in playlist ${playlistId} already in progress.`);
+          return;
+      }
+
+      // Type assertion might be needed if currentTrack isn't directly assignable to PlayerTrackInfo
+      const trackInfo = currentTrack as PlayerTrackInfo;
+
+      console.log(`Checkbox change for current track ${videoId} in playlist ${playlistId}. Checked: ${checked}`);
       if (checked === true) {
-          await addVideoToPlaylist(trackToAdd, playlistId);
+          await addVideoToPlaylist(trackInfo, playlistId);
       } else {
-          await removeVideoFromPlaylist(trackToAdd.id.videoId, playlistId);
+          await removeVideoFromPlaylist(videoId, playlistId);
       }
   };
 
+
    const isVideoInPlaylist = (videoId: string, playlistId: string): boolean => {
+     if (!videoId) return false;
     const playlist = playlists.find(p => p.id === playlistId);
     return !!playlist?.videoIds.includes(videoId);
   };
@@ -137,11 +148,15 @@ export function VideoPlayer() {
               // loop={isRepeating} // Let playNext handle repeat playlist logic. ReactPlayer loop is for single track.
               onProgress={handleProgress}
               onDuration={handleDuration}
-              onEnded={playNext}
+              onEnded={playNext} // Automatically play next on end
               width="1px"
               height="1px"
-              onError={(e, data) => console.error('Player error:', e, data)}
-              config={{ youtube: { playerVars: { controls: 0, disablekb: 1 } } }}
+              onError={(e, data, instance, hlsInstance) => {
+                  console.error('Player error:', e);
+                  // Optionally try to play the next track on error
+                   playNext();
+                }}
+              config={{ youtube: { playerVars: { controls: 0, disablekb: 1, origin: typeof window !== 'undefined' ? window.location.origin : undefined } } }}
             />
          </div>
        )}
@@ -193,7 +208,7 @@ export function VideoPlayer() {
           <Button
             variant="default"
             size="icon"
-            className="w-10 h-10 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 disabled:bg-accent/50"
+            className="w-10 h-10 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-50" // Adjusted disabled style
             onClick={togglePlayPause}
             disabled={!currentTrack}
              aria-label={isPlaying ? "Pause" : "Play"}
@@ -227,7 +242,7 @@ export function VideoPlayer() {
             onPointerDown={handleSeekMouseDown}
             onPointerUp={handleSeekMouseUp}
             className="flex-1 cursor-pointer"
-            disabled={!currentTrack}
+            disabled={!currentTrack || duration === 0} // Disable if no track or duration not loaded
              aria-label="Seek slider"
           />
           <span className="text-xs text-muted-foreground w-10 text-left tabular-nums">
@@ -242,8 +257,9 @@ export function VideoPlayer() {
          {currentTrack && user && (
              <Popover>
                 <PopoverTrigger asChild>
-                     <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Add to playlist" disabled={isUpdatingPlaylist}>
-                         {isUpdatingPlaylist ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />}
+                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent" aria-label="Add to playlist" disabled={isUpdatingCurrentTrackPlaylists}>
+                         {isUpdatingCurrentTrackPlaylists ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" /> /* Use Plus icon */}
+                         <span className="sr-only">Add to Playlist</span>
                      </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-60 p-0">
@@ -253,19 +269,23 @@ export function VideoPlayer() {
                      <ScrollArea className="h-[150px]">
                          <div className="p-4 space-y-2">
                             {playlists.length > 0 ? playlists.map((playlist) => {
-                                const isLoading = playlistLoading[playlist.id!];
+                                const playlistId = playlist.id!;
+                                const videoId = currentTrack.id.videoId;
+                                const addKey = `add_${playlistId}_${videoId}`;
+                                const removeKey = `remove_${playlistId}_${videoId}`;
+                                const isLoading = !!(playlistLoading[addKey] || playlistLoading[removeKey]);
                                 return (
-                                    <div key={playlist.id} className="flex items-center space-x-2">
+                                    <div key={playlistId} className="flex items-center space-x-2">
                                         <Checkbox
-                                          id={`player-playlist-${playlist.id}`}
-                                          checked={isVideoInPlaylist(currentTrack.id.videoId, playlist.id!)}
-                                          onCheckedChange={(checked) => handlePlaylistCheckboxChange(playlist.id!, checked)}
-                                          aria-labelledby={`label-player-playlist-${playlist.id}`}
-                                          disabled={isLoading || isUpdatingPlaylist} // Disable if this specific playlist is loading
+                                          id={`player-playlist-${playlistId}`}
+                                          checked={isVideoInPlaylist(videoId, playlistId)}
+                                          onCheckedChange={(checked) => handlePlaylistCheckboxChange(playlistId, checked)}
+                                          aria-labelledby={`label-player-playlist-${playlistId}`}
+                                          disabled={isLoading} // Disable specific checkbox if its operation is loading
                                         />
                                         <Label
-                                            htmlFor={`player-playlist-${playlist.id}`}
-                                            id={`label-player-playlist-${playlist.id}`}
+                                            htmlFor={`player-playlist-${playlistId}`}
+                                            id={`label-player-playlist-${playlistId}`}
                                             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 truncate"
                                         >
                                              {isLoading && <Loader2 className="w-3 h-3 mr-1 inline-block animate-spin"/>}
@@ -313,3 +333,4 @@ export function VideoPlayer() {
     </div>
   );
 }
+```
