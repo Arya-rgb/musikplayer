@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import { Inter } from 'next/font/google'; // Use Inter for a modern feel
 import './globals.css';
@@ -5,7 +6,8 @@ import { cn } from '@/lib/utils';
 import { Header } from '@/components/layout/header';
 import { Sidebar } from '@/components/layout/sidebar';
 import { VideoPlayer } from '@/components/player/video-player';
-import { Toaster } from "@/components/ui/toaster"
+import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider } from '@/context/auth-context'; // Import AuthProvider
 
 
 const inter = Inter({
@@ -24,6 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // No extra whitespace before <html> tag
     <html lang="en" className="dark">
       <body
         className={cn(
@@ -31,17 +34,18 @@ export default function RootLayout({
           inter.variable
         )}
       >
-        <Header />
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-24"> {/* Add padding-bottom for player */}
-             {children}
-          </main>
-        </div>
-         {/* Video Player fixed at the bottom */}
-         {/* Wrap VideoPlayer in a client component boundary if it uses hooks heavily */}
-        <VideoPlayer />
-         <Toaster />
+        <AuthProvider> {/* Wrap content with AuthProvider */}
+          <Header />
+          <div className="flex flex-1 overflow-hidden">
+            <Sidebar />
+            <main className="flex-1 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-24"> {/* Add padding-bottom for player */}
+              {children}
+            </main>
+          </div>
+          {/* Video Player fixed at the bottom */}
+          <VideoPlayer />
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

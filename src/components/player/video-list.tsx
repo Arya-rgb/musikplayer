@@ -1,36 +1,44 @@
+
 // src/components/player/video-list.tsx
 'use client';
 
 import React from 'react';
 import { usePlayerStore } from '@/store/player-store';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
-import { Play, Pause, Plus, Trash2, ListMusic } from 'lucide-react'; // Import Pause
+import { Play, Pause, Plus, Trash2, ListMusic, Loader2, Heart } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { YouTubeVideoSearchResultItem } from '@/services/youtube';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 export function VideoList() {
+   const { user, loading: authLoading } = useAuth(); // Get user and auth loading state
   const {
     searchResults,
     currentPlaylistVideos,
     playTrack,
     currentTrack,
-    playlists,
+    playlists, // Firestore playlists
     addVideoToPlaylist,
-    removeVideoFromPlaylist,
+    removeVideoFromPlaylist, // Keep this, used by checkbox logic
     activePlaylistId,
-    setActivePlaylist,
-    removeVideoFromCurrentPlaylist,
-    loading, // Get loading state
-    playlistDetails, // Get playlist details map
-    playlistLoading, // Get playlist loading state
+    removeVideoFromCurrentPlaylist, // Action specific to removing from the *view*
+    loading, // Search/popular loading
+    playlistDetails,
+    playlistLoading, // Playlist fetch/update loading
+    isPlaying, // Get isPlaying state
   } = usePlayerStore();
+
+   // Determine the specific loading state for the current view
+   const isPlaylistViewLoading = activePlaylistId ? (playlistLoading[activePlaylistId] ?? false) : false;
+   const isGeneralLoading = activePlaylistId ? isPlaylistViewLoading : loading; // Use search loading if not in playlist view
+    const isUpdatingPlaylist = Object.values(playlistLoading).some(Boolean); // Check if any playlist action is in progress
+
 
   const handlePlayVideo = (video: YouTubeVideoSearchResultItem) => {
     const listToUse = activePlaylistId ? currentPlaylistVideos : searchResults;
@@ -38,35 +46,34 @@ export function VideoList() {
     if (index !== -1) {
       playTrack(video, listToUse, index);
     } else {
-       // If playing from a context where the video isn't in the current list (e.g., search result clicked while playlist active)
-       // Play it as a single track or decide on behavior
        playTrack(video, [video], 0);
     }
   };
 
-   const handlePlaylistCheckboxChange = (video: YouTubeVideoSearchResultItem, playlistId: string, checked: boolean | 'indeterminate') => {
-      if (checked === true) {
-          addVideoToPlaylist(video, playlistId);
-      } else {
-          removeVideoFromPlaylist(video.id.videoId, playlistId);
-      }
+  // Handles adding/removing from ANY playlist via the popover checkbox
+  const handlePlaylistCheckboxChange = async (video: YouTubeVideoSearchResultItem, playlistId: string, checked: boolean | 'indeterminate') => {
+     if (!user) return; // Must be logged in
+     if (checked === true) {
+         await addVideoToPlaylist(video, playlistId);
+     } else {
+         await removeVideoFromPlaylist(video.id.videoId, playlistId);
+     }
   };
 
   const isVideoInPlaylist = (videoId: string, playlistId: string): boolean => {
     const playlist = playlists.find(p => p.id === playlistId);
+    // Check the videoIds array from the Firestore playlist structure
     return !!playlist?.videoIds.includes(videoId);
   };
 
-
-  const handleRemoveFromCurrentPlaylist = (videoId: string) => {
-    if (activePlaylistId) {
-      removeVideoFromCurrentPlaylist(videoId, activePlaylistId);
-    }
+  // Handles removing from the CURRENTLY ACTIVE playlist (the one being viewed)
+  const handleRemoveFromCurrentPlaylist = async (videoId: string) => {
+    if (!user || !activePlaylistId) return; // Must be logged in and a playlist must be active
+    await removeVideoFromCurrentPlaylist(videoId, activePlaylistId);
   };
 
-  // Determine which list of videos to display
+  // Determine which list of videos to display and the title
   const displayVideos = activePlaylistId ? currentPlaylistVideos : searchResults;
-  const isLoading = activePlaylistId ? playlistLoading[activePlaylistId] ?? false : loading;
   const playlistName = activePlaylistId ? playlists.find(p => p.id === activePlaylistId)?.name : "Search Results";
 
 
@@ -79,8 +86,8 @@ export function VideoList() {
           <Skeleton className="h-3 w-1/2" />
         </div>
         <Skeleton className="w-8 h-8 rounded-full" />
-        <Skeleton className="w-8 h-8 rounded-full" />
-         {activePlaylistId && <Skeleton className="w-8 h-8 rounded-full" />}
+        {user && <Skeleton className="w-8 h-8 rounded-full" />} {/* Add to playlist skeleton */}
+         {user && activePlaylistId && <Skeleton className="w-8 h-8 rounded-full" />} {/* Remove from playlist skeleton */}
       </Card>
     ))
   );
@@ -90,10 +97,12 @@ export function VideoList() {
       <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
         <ListMusic className="w-5 h-5 text-accent"/>
          {playlistName || 'Vibes'}
+         {isGeneralLoading && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
       </h2>
-      <ScrollArea className="h-[calc(100vh-200px)] pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent"> {/* Adjust height as needed */}
+      <ScrollArea className="h-[calc(100vh-200px)] pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent"> {/* Adjust height */}
         <div className="space-y-3">
-          {isLoading ? renderSkeleton(8) : (
+          {authLoading ? renderSkeleton(8) : // Show skeletons during auth check
+           isGeneralLoading ? renderSkeleton(8) : ( // Show skeletons during data fetch
             displayVideos.length > 0 ? displayVideos.map((video) => (
             <Card
               key={video.id.videoId}
@@ -114,76 +123,88 @@ export function VideoList() {
                 <p className="text-xs text-muted-foreground truncate">{video.snippet.channelTitle}</p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)}>
-                 {currentTrack?.id.videoId === video.id.videoId && usePlayerStore.getState().isPlaying ? (
+                 {currentTrack?.id.videoId === video.id.videoId && isPlaying ? (
                     <Pause className="w-5 h-5 text-accent" />
                   ) : (
                      <Play className="w-5 h-5 text-accent fill-current" />
                   )}
-
                 <span className="sr-only">Play</span>
               </Button>
 
-             {/* Add to Playlist Popover */}
-             <Popover>
-                <PopoverTrigger asChild>
-                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent">
-                        <Plus className="w-5 h-5" />
-                        <span className="sr-only">Add to Playlist</span>
-                     </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-52 p-0">
-                     <div className="p-3 border-b">
-                         <p className="text-sm font-medium">Add to playlist</p>
-                     </div>
-                     <ScrollArea className="h-[120px]">
-                         <div className="p-3 space-y-1.5">
-                            {playlists.length > 0 ? playlists.map((playlist) => (
-                                <div key={playlist.id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`pop-${video.id.videoId}-${playlist.id}`}
-                                      checked={isVideoInPlaylist(video.id.videoId, playlist.id)}
-                                      onCheckedChange={(checked) => handlePlaylistCheckboxChange(video, playlist.id, checked)}
-                                      aria-labelledby={`label-pop-${video.id.videoId}-${playlist.id}`}
-                                    />
-                                    <Label
-                                        htmlFor={`pop-${video.id.videoId}-${playlist.id}`}
-                                        id={`label-pop-${video.id.videoId}-${playlist.id}`}
-                                        className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 truncate"
-                                    >
-                                        {playlist.name}
-                                    </Label>
-                                </div>
-                            )) : (
-                                <p className="text-xs text-muted-foreground text-center px-2 py-1">No playlists yet.</p>
-                            )}
+             {/* Add to Playlist Popover - Only show if logged in */}
+             {user && (
+                 <Popover>
+                    <PopoverTrigger asChild>
+                         <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent" disabled={isUpdatingPlaylist}>
+                            {isUpdatingPlaylist && playlistLoading[activePlaylistId ?? ''] ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" /> }
+                            <span className="sr-only">Add to Playlist</span>
+                         </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-52 p-0">
+                         <div className="p-3 border-b">
+                             <p className="text-sm font-medium">Add to playlist</p>
                          </div>
-                    </ScrollArea>
-                </PopoverContent>
-            </Popover>
+                         <ScrollArea className="h-[120px]">
+                             <div className="p-3 space-y-1.5">
+                                {playlists.length > 0 ? playlists.map((playlist) => (
+                                    <div key={playlist.id} className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`pop-${video.id.videoId}-${playlist.id}`}
+                                          checked={isVideoInPlaylist(video.id.videoId, playlist.id!)}
+                                          onCheckedChange={(checked) => handlePlaylistCheckboxChange(video, playlist.id!, checked)}
+                                          aria-labelledby={`label-pop-${video.id.videoId}-${playlist.id}`}
+                                          disabled={playlistLoading[playlist.id!] || isUpdatingPlaylist} // Disable if specific playlist is loading
+                                        />
+                                        <Label
+                                            htmlFor={`pop-${video.id.videoId}-${playlist.id}`}
+                                            id={`label-pop-${video.id.videoId}-${playlist.id}`}
+                                            className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 truncate"
+                                        >
+                                            {playlistLoading[playlist.id!] && <Loader2 className="w-3 h-3 mr-1 inline-block animate-spin"/>}
+                                            {playlist.name}
+                                        </Label>
+                                    </div>
+                                )) : (
+                                    <p className="text-xs text-muted-foreground text-center px-2 py-1">No playlists yet. Create one!</p>
+                                )}
+                             </div>
+                        </ScrollArea>
+                    </PopoverContent>
+                </Popover>
+             )}
 
-              {/* Remove from current playlist button (only shows if a playlist is active) */}
-               {activePlaylistId && (
+
+              {/* Remove from current playlist button - Only show if logged in and a playlist is active */}
+               {user && activePlaylistId && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-destructive"
                     onClick={() => handleRemoveFromCurrentPlaylist(video.id.videoId)}
                     title="Remove from this playlist"
+                    disabled={playlistLoading[activePlaylistId] || isUpdatingPlaylist} // Disable if current playlist is loading
                   >
-                    <Trash2 className="w-4 h-4" />
+                     {playlistLoading[activePlaylistId] ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4" />}
                     <span className="sr-only">Remove from playlist</span>
                   </Button>
                 )}
 
             </Card>
           )) : (
+             // Empty state message
             <div className="flex flex-col items-center justify-center h-60 text-center">
                  <ListMusic className="w-12 h-12 text-muted-foreground mb-4"/>
                 <p className="text-muted-foreground">
-                 {activePlaylistId ? "This playlist is empty." : "No search results."}
+                 {activePlaylistId
+                    ? (playlists.find(p => p.id === activePlaylistId) ? "This playlist is empty." : "Playlist not found.")
+                    : "No search results."
+                 }
                 </p>
-                <p className="text-sm text-muted-foreground/70">
-                   {activePlaylistId ? "Add some vibes!" : "Try searching for a song or artist."}
+                 {!user && !activePlaylistId && (
+                     <p className="text-sm text-muted-foreground/70 mt-1">Log in to save videos to playlists.</p>
+                 )}
+                <p className="text-sm text-muted-foreground/70 mt-1">
+                   {activePlaylistId ? (user ? "Add some vibes!" : "Log in to add videos.") : "Try searching for a song or artist."}
                 </p>
             </div>
 
@@ -194,3 +215,4 @@ export function VideoList() {
     </div>
   );
 }
+

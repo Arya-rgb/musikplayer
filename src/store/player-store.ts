@@ -1,6 +1,22 @@
+
 // src/store/player-store.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  query,
+  where,
+  Timestamp, // Import Timestamp
+  serverTimestamp, // For setting server time
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase/client'; // Import Firestore instance
 import {
   searchYouTubeVideos,
   getPopularMusicVideos,
@@ -8,43 +24,55 @@ import {
   YouTubeVideoSearchResultItem,
   YouTubeVideoDetailsItem,
 } from '@/services/youtube';
-import { produce } from 'immer'; // Optional: for easier state updates
+import { produce } from 'immer';
 
-
-export interface Playlist {
-  id: string;
+// Define Firestore Playlist Structure
+export interface FirestorePlaylist {
+  id?: string; // Firestore document ID, added after creation
+  userId: string;
   name: string;
-  videoIds: string[];
+  createdAt: Timestamp | FieldValue; // Use Firestore Timestamp or FieldValue for server time
+  videoIds: string[]; // Array of YouTube video IDs
 }
+// FieldValue type from Firestore for serverTimestamp
+import type { FieldValue } from 'firebase/firestore';
 
-// Extend the search result item for internal use to potentially hold more details later
+
+// Keep the internal Playlist type for Zustand state if needed, but FirestorePlaylist is the source of truth
+export interface Playlist extends FirestorePlaylist {} // Alias or extend if needed
+
+// Extend the search result item for internal use
 export type PlayerTrackInfo = YouTubeVideoSearchResultItem & { details?: YouTubeVideoDetailsItem };
 
 interface PlayerState {
+  userId: string | null; // Track the current user ID
   searchResults: PlayerTrackInfo[];
-  playlists: Playlist[];
+  playlists: Playlist[]; // Now mirrors Firestore data for the logged-in user
   currentTrack: PlayerTrackInfo | null;
-  currentPlaylist: PlayerTrackInfo[]; // The list of tracks currently being played (could be search results or a playlist)
-  currentTrackIndex: number; // Index within currentPlaylist
-  activePlaylistId: string | null; // ID of the playlist being viewed/edited, null for search results view
+  currentPlaylist: PlayerTrackInfo[];
+  currentTrackIndex: number;
+  activePlaylistId: string | null; // Firestore document ID of the active playlist
   isPlaying: boolean;
   volume: number;
   isMuted: boolean;
   isRepeating: boolean;
   isShuffling: boolean;
-  loading: boolean; // General loading state, e.g., for search
+  loading: boolean; // General loading state (search, popular)
+  playlistLoading: Record<string, boolean>; // Loading state per playlist ID (fetch, update)
   playlistDetails: Record<string, PlayerTrackInfo>; // Cache for video details by ID
-  playlistLoading: Record<string, boolean>; // Loading state per playlist ID
   currentPlaylistVideos: PlayerTrackInfo[]; // Videos currently loaded for the active playlist view
 
   // Actions
+  setUserId: (userId: string | null) => void;
+  clearUserData: () => void; // Action to clear user-specific data on logout
+  fetchUserPlaylists: (userId: string) => Promise<void>;
   searchVideos: (query: string) => Promise<void>;
   fetchPopularVideos: () => Promise<void>;
-  addPlaylist: (name: string) => void;
-  removePlaylist: (id: string) => void;
-  addVideoToPlaylist: (video: PlayerTrackInfo, playlistId: string) => void;
-  removeVideoFromPlaylist: (videoId: string, playlistId: string) => void;
-  removeVideoFromCurrentPlaylist: (videoId: string, playlistId: string) => void;
+  addPlaylist: (name: string) => Promise<void>; // Now async for Firestore
+  removePlaylist: (id: string) => Promise<void>; // Now async for Firestore
+  addVideoToPlaylist: (video: PlayerTrackInfo, playlistId: string) => Promise<void>; // Now async for Firestore
+  removeVideoFromPlaylist: (videoId: string, playlistId: string) => Promise<void>; // Now async for Firestore
+  removeVideoFromCurrentPlaylist: (videoId: string, playlistId: string) => Promise<void>; // Now async
   playTrack: (track: PlayerTrackInfo, playlist: PlayerTrackInfo[], index: number) => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -55,11 +83,8 @@ interface PlayerState {
   toggleShuffle: () => void;
   setActivePlaylist: (id: string | null) => void;
   loadPlaylist: (id: string) => Promise<void>;
-  _hydratePlaylistVideos: (playlistId: string, videos: PlayerTrackInfo[]) => void; // Internal hydration helper
+  _hydratePlaylistVideos: (playlistId: string, videos: PlayerTrackInfo[]) => void;
 }
-
-// Helper to generate unique IDs
-const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // Helper to shuffle an array
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -71,31 +96,72 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return shuffled;
 };
 
+const playlistsCollection = collection(db, 'playlists'); // Firestore collection reference
+
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => ({
+      userId: null, // Initialize userId as null
       searchResults: [],
-      playlists: [],
+      playlists: [], // Initialize playlists as empty
       currentTrack: null,
       currentPlaylist: [],
       currentTrackIndex: -1,
-      activePlaylistId: null, // Start with no active playlist (showing search/popular)
+      activePlaylistId: null,
       isPlaying: false,
       volume: 0.8,
       isMuted: false,
       isRepeating: false,
       isShuffling: false,
       loading: false,
-      playlistDetails: {},
       playlistLoading: {},
+      playlistDetails: {},
       currentPlaylistVideos: [],
+
+      setUserId: (userId) => set({ userId }),
+
+       clearUserData: () => set({
+         userId: null,
+         playlists: [],
+         activePlaylistId: null,
+         currentPlaylistVideos: [],
+         // Optionally reset other states like currentTrack if desired
+         // currentTrack: null,
+         // currentPlaylist: [],
+         // currentTrackIndex: -1,
+         // isPlaying: false,
+       }),
+
+      fetchUserPlaylists: async (userId) => {
+         if (!userId) {
+             set({ playlists: [] }); // Clear playlists if no user ID
+             return;
+         }
+         set(produce((state: PlayerState) => { state.playlistLoading['fetch'] = true; }));
+         try {
+             const q = query(playlistsCollection, where('userId', '==', userId));
+             const querySnapshot = await getDocs(q);
+             const userPlaylists: Playlist[] = [];
+             querySnapshot.forEach((doc) => {
+                 userPlaylists.push({ id: doc.id, ...doc.data() } as Playlist);
+             });
+              // Sort playlists, e.g., by name or creation date
+             userPlaylists.sort((a, b) => a.name.localeCompare(b.name)); // Example: sort by name
+             set({ playlists: userPlaylists });
+         } catch (error) {
+             console.error("Failed to fetch user playlists:", error);
+             set({ playlists: [] }); // Set empty on error
+         } finally {
+             set(produce((state: PlayerState) => { delete state.playlistLoading['fetch']; }));
+         }
+      },
 
 
       searchVideos: async (query) => {
-        set({ loading: true, activePlaylistId: null, currentPlaylistVideos: [] }); // Clear active playlist view on new search
+        set({ loading: true, activePlaylistId: null, currentPlaylistVideos: [] });
         try {
-          const results = await searchYouTubeVideos(query, 20); // Fetch more for better shuffling
+          const results = await searchYouTubeVideos(query, 20);
           set({ searchResults: results.items || [], loading: false });
         } catch (error) {
           console.error("Failed to search videos:", error);
@@ -104,10 +170,9 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       fetchPopularVideos: async () => {
-         set({ loading: true, activePlaylistId: null, currentPlaylistVideos: [] }); // Ensure search/popular view
+         set({ loading: true, activePlaylistId: null, currentPlaylistVideos: [] });
          try {
-           const results = await getPopularMusicVideos(20); // Fetch more
-            // Filter out potential non-video items if any sneak through API adaptation
+           const results = await getPopularMusicVideos(20);
            const videos = (results.items || []).filter(item => item.id?.kind === 'youtube#video' && item.id?.videoId);
            set({ searchResults: videos, loading: false });
          } catch (error) {
@@ -116,98 +181,181 @@ export const usePlayerStore = create<PlayerState>()(
          }
        },
 
-      addPlaylist: (name) =>
-        set(
-          produce((state: PlayerState) => {
-            const newPlaylist: Playlist = { id: generateId(), name, videoIds: [] };
-            state.playlists.push(newPlaylist);
-          })
-        ),
+      addPlaylist: async (name) => {
+         const userId = get().userId;
+         if (!userId) {
+             console.error("Cannot add playlist: User not logged in.");
+             return; // Or throw error/show notification
+         }
+         const newPlaylistData: Omit<FirestorePlaylist, 'id'> = {
+             userId,
+             name,
+             createdAt: serverTimestamp(), // Use server timestamp
+             videoIds: [],
+         };
+          set(produce((state: PlayerState) => { state.playlistLoading['add'] = true; }));
+         try {
+             const docRef = await addDoc(playlistsCollection, newPlaylistData);
+             const newPlaylist: Playlist = { ...newPlaylistData, id: docRef.id, createdAt: Timestamp.now() /* Optimistic update with client time */ }; // Use client time for immediate UI update
+             set(
+               produce((state: PlayerState) => {
+                 state.playlists.push(newPlaylist);
+                  // Optionally sort again
+                  state.playlists.sort((a, b) => a.name.localeCompare(b.name));
+               })
+             );
+             // Potentially re-fetch or just rely on optimistic update
+             // await get().fetchUserPlaylists(userId); // Uncomment if you prefer re-fetching
+         } catch (error) {
+             console.error("Failed to add playlist:", error);
+             // Optionally show error toast
+         } finally {
+              set(produce((state: PlayerState) => { delete state.playlistLoading['add']; }));
+         }
+      },
 
-      removePlaylist: (id) =>
-        set(
-          produce((state: PlayerState) => {
-            state.playlists = state.playlists.filter((p) => p.id !== id);
-            // If the removed playlist was active, reset view
-            if (state.activePlaylistId === id) {
-              state.activePlaylistId = null;
-              state.currentPlaylistVideos = [];
-            }
-             // If the removed playlist was the *current* playing list, stop playback or move to next sensible state
-             if (state.currentPlaylist.length > 0 && state.playlists.find(p => p.id === id)?.videoIds.includes(state.currentTrack?.id.videoId ?? '')) {
-                // Basic reset - could be smarter (e.g., play popular)
-                state.currentTrack = null;
-                state.currentPlaylist = [];
-                state.currentTrackIndex = -1;
-                state.isPlaying = false;
-             }
-          })
-        ),
+       removePlaylist: async (id) => {
+         const userId = get().userId;
+          if (!userId) {
+             console.error("Cannot remove playlist: User not logged in.");
+             return;
+          }
+           // Verify ownership before deleting (optional but recommended for security rules later)
+         const playlistToRemove = get().playlists.find(p => p.id === id);
+          if (!playlistToRemove || playlistToRemove.userId !== userId) {
+             console.error("Cannot remove playlist: Permission denied or playlist not found.");
+             return;
+          }
 
-      addVideoToPlaylist: (video, playlistId) =>
-        set(
-          produce((state: PlayerState) => {
-            const playlist = state.playlists.find((p) => p.id === playlistId);
-            if (playlist && !playlist.videoIds.includes(video.id.videoId)) {
-              playlist.videoIds.push(video.id.videoId);
-               // Add details to cache if not already there
-               if (!state.playlistDetails[video.id.videoId]) {
-                 state.playlistDetails[video.id.videoId] = video;
-               }
-               // If adding to the currently viewed playlist, update the view
-               if (state.activePlaylistId === playlistId) {
-                   state.currentPlaylistVideos.push(video);
-               }
-            }
-          })
-        ),
-
-      removeVideoFromPlaylist: (videoId, playlistId) =>
-        set(
-          produce((state: PlayerState) => {
-            const playlist = state.playlists.find((p) => p.id === playlistId);
-            if (playlist) {
-              playlist.videoIds = playlist.videoIds.filter((id) => id !== videoId);
-              // If removing from the currently viewed playlist, update the view
-              if (state.activePlaylistId === playlistId) {
-                state.currentPlaylistVideos = state.currentPlaylistVideos.filter(v => v.id.videoId !== videoId);
-              }
-            }
-          })
-        ),
-
-        // Specific action to remove from the *currently viewed* playlist in the UI
-       removeVideoFromCurrentPlaylist: (videoId, playlistId) => {
-          // First, update the persistent playlist data
-          get().removeVideoFromPlaylist(videoId, playlistId);
-          // Then, update the currently playing list *if* it's the same as the active playlist
-          set(produce((state: PlayerState) => {
-             if (state.currentPlaylist.length > 0 && state.playlists.find(p => p.id === playlistId)?.videoIds.includes(videoId)) {
-                 const removedIndex = state.currentPlaylist.findIndex(track => track.id.videoId === videoId);
-                 state.currentPlaylist = state.currentPlaylist.filter(track => track.id.videoId !== videoId);
-
-                 // Adjust currentTrackIndex if necessary
-                 if (removedIndex !== -1) {
-                    if (state.currentTrackIndex === removedIndex) {
-                       // If the removed track was the current one
-                       if (state.currentPlaylist.length === 0) {
-                           // Playlist is now empty
-                           state.currentTrack = null;
-                           state.currentTrackIndex = -1;
-                           state.isPlaying = false;
-                       } else {
-                           // Move to the next track (or wrap around/stop based on repeat/shuffle)
-                           // Simplified: just move to the 'next' index, which might now be out of bounds
-                           state.currentTrackIndex = Math.min(removedIndex, state.currentPlaylist.length - 1);
-                           state.currentTrack = state.currentPlaylist[state.currentTrackIndex];
-                           // Decide whether to keep playing or pause
-                           // state.isPlaying = state.isPlaying; // Keep playing if it was
-                       }
-                    } else if (state.currentTrackIndex > removedIndex) {
-                       state.currentTrackIndex--; // Adjust index if removed track was before current
-                    }
+         set(produce((state: PlayerState) => { state.playlistLoading[id] = true; }));
+         try {
+             const playlistDocRef = doc(db, 'playlists', id);
+             await deleteDoc(playlistDocRef);
+             set(
+               produce((state: PlayerState) => {
+                 state.playlists = state.playlists.filter((p) => p.id !== id);
+                 if (state.activePlaylistId === id) {
+                   state.activePlaylistId = null;
+                   state.currentPlaylistVideos = [];
                  }
-             }
+                 // Consider player state reset if the current playing list was deleted
+               })
+             );
+         } catch (error) {
+             console.error("Failed to remove playlist:", error);
+         } finally {
+              set(produce((state: PlayerState) => { delete state.playlistLoading[id]; }));
+         }
+       },
+
+       addVideoToPlaylist: async (video, playlistId) => {
+         const userId = get().userId;
+          if (!userId) return;
+
+           // Verify ownership
+         const playlist = get().playlists.find(p => p.id === playlistId);
+          if (!playlist || playlist.userId !== userId) return;
+
+         if (playlist.videoIds.includes(video.id.videoId)) {
+              console.log("Video already in playlist");
+              return; // Already exists
+         }
+
+          set(produce((state: PlayerState) => { state.playlistLoading[playlistId] = true; }));
+          try {
+             const playlistDocRef = doc(db, 'playlists', playlistId);
+             await updateDoc(playlistDocRef, {
+                 videoIds: arrayUnion(video.id.videoId)
+             });
+
+             // Optimistic UI update
+              set(
+                produce((state: PlayerState) => {
+                  const targetPlaylist = state.playlists.find((p) => p.id === playlistId);
+                  if (targetPlaylist) {
+                     targetPlaylist.videoIds.push(video.id.videoId);
+                     if (!state.playlistDetails[video.id.videoId]) {
+                        state.playlistDetails[video.id.videoId] = video;
+                     }
+                     if (state.activePlaylistId === playlistId) {
+                        // Add to the currently viewed list if it's the active one
+                        // Ensure video details are available before adding
+                         const videoWithDetails = state.playlistDetails[video.id.videoId] || video;
+                        state.currentPlaylistVideos.push(videoWithDetails);
+                     }
+                  }
+                })
+              );
+              // await get().loadPlaylist(playlistId); // Optionally reload full details after update
+          } catch (error) {
+              console.error("Failed to add video to playlist:", error);
+          } finally {
+                set(produce((state: PlayerState) => { delete state.playlistLoading[playlistId]; }));
+          }
+       },
+
+
+       removeVideoFromPlaylist: async (videoId, playlistId) => {
+         const userId = get().userId;
+         if (!userId) return;
+         const playlist = get().playlists.find(p => p.id === playlistId);
+         if (!playlist || playlist.userId !== userId) return; // Check ownership
+
+          set(produce((state: PlayerState) => { state.playlistLoading[playlistId] = true; }));
+         try {
+             const playlistDocRef = doc(db, 'playlists', playlistId);
+             await updateDoc(playlistDocRef, {
+                 videoIds: arrayRemove(videoId)
+             });
+
+              // Optimistic UI update
+              set(
+                produce((state: PlayerState) => {
+                  const targetPlaylist = state.playlists.find((p) => p.id === playlistId);
+                  if (targetPlaylist) {
+                    targetPlaylist.videoIds = targetPlaylist.videoIds.filter(id => id !== videoId);
+                     if (state.activePlaylistId === playlistId) {
+                         state.currentPlaylistVideos = state.currentPlaylistVideos.filter(v => v.id.videoId !== videoId);
+                     }
+                  }
+                })
+              );
+         } catch (error) {
+             console.error("Failed to remove video from playlist:", error);
+         } finally {
+              set(produce((state: PlayerState) => { delete state.playlistLoading[playlistId]; }));
+         }
+       },
+
+
+       removeVideoFromCurrentPlaylist: async (videoId, playlistId) => {
+          // This now calls the Firestore-aware remove function
+          await get().removeVideoFromPlaylist(videoId, playlistId);
+
+          // Update player state if the removed video was playing or in the queue
+          set(produce((state: PlayerState) => {
+              // Check if the video was in the current playback queue
+              const removedIndex = state.currentPlaylist.findIndex(track => track.id.videoId === videoId);
+              if (removedIndex !== -1) {
+                  state.currentPlaylist = state.currentPlaylist.filter(track => track.id.videoId !== videoId);
+
+                  // Adjust currentTrackIndex if necessary
+                  if (state.currentTrackIndex === removedIndex) {
+                      // If the removed track was the current one
+                      if (state.currentPlaylist.length === 0) {
+                          state.currentTrack = null;
+                          state.currentTrackIndex = -1;
+                          state.isPlaying = false;
+                      } else {
+                           // Move index, wrap if needed (ensure index stays within bounds)
+                           state.currentTrackIndex = removedIndex % state.currentPlaylist.length;
+                           state.currentTrack = state.currentPlaylist[state.currentTrackIndex];
+                           // state.isPlaying remains unchanged or set based on preference
+                      }
+                  } else if (state.currentTrackIndex > removedIndex) {
+                      state.currentTrackIndex--; // Adjust index if removed track was before current
+                  }
+              }
           }));
        },
 
@@ -215,13 +363,12 @@ export const usePlayerStore = create<PlayerState>()(
       playTrack: (track, playlist, index) => {
          const { isShuffling } = get();
          const actualPlaylist = isShuffling ? shuffleArray(playlist) : playlist;
-         // Find the index of the track in the potentially shuffled playlist
          const actualIndex = actualPlaylist.findIndex(t => t.id.videoId === track.id.videoId);
 
          set({
            currentTrack: track,
            currentPlaylist: actualPlaylist,
-           currentTrackIndex: actualIndex !== -1 ? actualIndex : 0, // Fallback to 0 if somehow not found
+           currentTrackIndex: actualIndex !== -1 ? actualIndex : 0,
            isPlaying: true,
          });
       },
@@ -230,11 +377,11 @@ export const usePlayerStore = create<PlayerState>()(
           set(produce((state: PlayerState) => {
               if (!state.currentTrack || state.currentPlaylist.length === 0) return;
 
-              const { currentTrackIndex, currentPlaylist, isRepeating, isShuffling } = state;
+              const { currentTrackIndex, currentPlaylist, isRepeating } = state;
               let nextIndex = currentTrackIndex + 1;
 
               if (isRepeating && nextIndex >= currentPlaylist.length) {
-                  nextIndex = 0; // Loop back to the start if repeating whole list
+                  nextIndex = 0;
               }
 
               if (nextIndex >= 0 && nextIndex < currentPlaylist.length) {
@@ -242,40 +389,28 @@ export const usePlayerStore = create<PlayerState>()(
                   state.currentTrack = state.currentPlaylist[nextIndex];
                   state.isPlaying = true;
               } else {
-                   // Reached end of non-repeating list
-                  state.isPlaying = false; // Stop playing
-                  // Optionally reset to start:
-                  // state.currentTrackIndex = 0;
-                  // state.currentTrack = state.currentPlaylist[0];
+                  state.isPlaying = false;
               }
-
-               // If shuffling is on, the playlist is already shuffled. Just move to the next index.
-               // If repeat *single* is desired, ReactPlayer's loop prop handles it.
-               // If repeat *playlist* is desired, the logic above handles wrapping.
           }));
       },
 
      playPrevious: () => {
          set(produce((state: PlayerState) => {
              if (!state.currentTrack || state.currentPlaylist.length === 0) return;
-
-             const { currentTrackIndex, currentPlaylist, isRepeating, isShuffling } = state; // isShuffling might be relevant if we want 'true previous' which is complex
+             const { currentTrackIndex, currentPlaylist, isRepeating } = state;
              let prevIndex = currentTrackIndex - 1;
 
              if (prevIndex < 0) {
                  if (isRepeating) {
-                     prevIndex = currentPlaylist.length - 1; // Wrap to end if repeating
+                     prevIndex = currentPlaylist.length - 1;
                  } else {
-                      // Reached start of non-repeating list
-                     // Option 1: Stop
-                     // state.isPlaying = false;
-                     // return;
-                     // Option 2: Stay on the first track (do nothing or reset time)
-                      playerRef.current?.seekTo(0); // Requires playerRef access, tricky in Zustand
-                     return; // Or just don't change track
+                     // Stop or stay on first track
+                     // For now, just stay
+                      // Attempt to seek to 0 - This logic ideally belongs in the player component
+                     // playerRef.current?.seekTo(0);
+                     return;
                  }
              }
-
              state.currentTrackIndex = prevIndex;
              state.currentTrack = state.currentPlaylist[prevIndex];
              state.isPlaying = true;
@@ -285,34 +420,38 @@ export const usePlayerStore = create<PlayerState>()(
       togglePlayPause: () => set((state) => ({ isPlaying: !state.isPlaying })),
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
       toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
-
-     toggleRepeat: () => set((state) => ({ isRepeating: !state.isRepeating })),
+      toggleRepeat: () => set((state) => ({ isRepeating: !state.isRepeating })),
 
       toggleShuffle: () => {
          set(produce((state: PlayerState) => {
              state.isShuffling = !state.isShuffling;
              if (state.currentPlaylist.length > 0) {
+                  const currentId = state.currentTrack?.id.videoId;
                  if (state.isShuffling) {
-                     // Shuffle the current playlist, keeping the current track at index 0 (or its new position)
-                     const currentId = state.currentTrack?.id.videoId;
+                     // Shuffle
                      state.currentPlaylist = shuffleArray(state.currentPlaylist);
-                     // Find the new index of the current track after shuffling
                      const newIndex = state.currentPlaylist.findIndex(track => track.id.videoId === currentId);
                      state.currentTrackIndex = newIndex !== -1 ? newIndex : 0;
                  } else {
-                     // Unshuffle: Revert to original order (requires storing original or fetching again)
-                     // Simple approach: Use search results or fetch playlist again if needed.
-                     // This example assumes the source (searchResults or fetched playlist) is the "original".
-                     const sourcePlaylist = state.activePlaylistId
-                         ? state.playlists.find(p => p.id === state.activePlaylistId)?.videoIds.map(id => state.playlistDetails[id]).filter(Boolean) ?? []
-                         : state.searchResults;
+                     // Unshuffle - requires original order
+                     // Fetch original order based on active context (search or playlist)
+                     let originalOrder: PlayerTrackInfo[] = [];
+                      if (state.activePlaylistId) {
+                          const activePlaylist = state.playlists.find(p => p.id === state.activePlaylistId);
+                          if (activePlaylist) {
+                             originalOrder = activePlaylist.videoIds
+                                 .map(id => state.playlistDetails[id])
+                                 .filter((v): v is PlayerTrackInfo => !!v); // Map IDs to cached details
+                          }
+                      } else {
+                          originalOrder = state.searchResults; // Assume search results are the original order
+                      }
 
-                      // Filter sourcePlaylist to only include items currently in the shuffled list if necessary
-                      const currentIds = new Set(state.currentPlaylist.map(t => t.id.videoId));
-                      state.currentPlaylist = sourcePlaylist.filter(t => currentIds.has(t.id.videoId));
+                      // Filter originalOrder to only include items currently in the shuffled list
+                      const currentIdsSet = new Set(state.currentPlaylist.map(t => t.id.videoId));
+                      state.currentPlaylist = originalOrder.filter(t => currentIdsSet.has(t.id.videoId));
 
-                      // Find the new index of the current track
-                     const currentId = state.currentTrack?.id.videoId;
+                     // Find the new index of the current track
                      const newIndex = state.currentPlaylist.findIndex(track => track.id.videoId === currentId);
                      state.currentTrackIndex = newIndex !== -1 ? newIndex : 0;
                  }
@@ -320,101 +459,105 @@ export const usePlayerStore = create<PlayerState>()(
          }));
       },
 
+       setActivePlaylist: (id) => {
+          set({ activePlaylistId: id });
+          if (id) {
+              get().loadPlaylist(id); // Load videos when playlist becomes active
+          } else {
+               set({ currentPlaylistVideos: [] }); // Clear when switching to search/popular
+          }
+        },
 
-      setActivePlaylist: (id) => set({ activePlaylistId: id }),
 
-       // Internal helper to update cached details and trigger UI update
        _hydratePlaylistVideos: (playlistId, videos) => {
           set(produce((state: PlayerState) => {
              videos.forEach(video => {
-                 // Use the structure from search/details directly
-                 state.playlistDetails[video.id.videoId] = video;
+                  // Ensure video has necessary structure
+                  if (video && video.id?.videoId && video.snippet) {
+                     state.playlistDetails[video.id.videoId] = video;
+                  } else {
+                      console.warn("Attempted to hydrate invalid video data for playlist:", playlistId, video);
+                  }
              });
-             // If this is the currently active playlist, update the view
              if (state.activePlaylistId === playlistId) {
-                 state.currentPlaylistVideos = videos;
+                 state.currentPlaylistVideos = videos.filter(v => v && v.id?.videoId); // Ensure valid videos
              }
-              state.playlistLoading[playlistId] = false; // Mark loading as complete
+              state.playlistLoading[playlistId] = false;
           }));
        },
 
-      // Load video details for a specific playlist
        loadPlaylist: async (id) => {
           const playlist = get().playlists.find(p => p.id === id);
-          if (!playlist) return;
+          if (!playlist || playlist.userId !== get().userId) return; // Check ownership
 
-           set(produce((state: PlayerState) => {
-               state.playlistLoading[id] = true;
-           }));
+           set(produce((state: PlayerState) => { state.playlistLoading[id] = true; }));
 
-
-          const videoIdsToFetch = playlist.videoIds.filter(videoId => !get().playlistDetails[videoId]);
+          // Get IDs already cached
+          const cachedDetails = get().playlistDetails;
+          const videoIdsToFetch = playlist.videoIds.filter(videoId => !cachedDetails[videoId]);
 
           try {
-              let fetchedVideos: PlayerTrackInfo[] = [];
+              let fetchedVideosMap: Record<string, PlayerTrackInfo> = {};
               if (videoIdsToFetch.length > 0) {
-                 // Fetch details for missing videos
                  const detailsResult = await getYouTubeVideoDetailsByIds(videoIdsToFetch);
-                 fetchedVideos = detailsResult.items.map(item => ({
-                    // Adapt details item to search result item structure
-                    kind: 'youtube#searchResult',
-                    etag: item.etag,
-                    id: { kind: 'youtube#video', videoId: item.id },
-                    snippet: item.snippet,
-                    details: item, // Store full details if needed later
-                 }));
+                 detailsResult.items.forEach(item => {
+                    fetchedVideosMap[item.id] = {
+                        kind: 'youtube#searchResult',
+                        etag: item.etag,
+                        id: { kind: 'youtube#video', videoId: item.id },
+                        snippet: item.snippet,
+                        details: item,
+                    };
+                 });
               }
 
-               // Combine cached and newly fetched videos, maintaining original playlist order
+               // Combine cached and fetched, maintaining original playlist order
                const allPlaylistVideos = playlist.videoIds.map(videoId => {
-                    return get().playlistDetails[videoId] || fetchedVideos.find(v => v.id.videoId === videoId);
-                }).filter((video): video is PlayerTrackInfo => Boolean(video)); // Filter out any potential nulls/undefined
+                    return cachedDetails[videoId] || fetchedVideosMap[videoId];
+                }).filter((video): video is PlayerTrackInfo => Boolean(video));
 
-
-               get()._hydratePlaylistVideos(id, allPlaylistVideos); // Use helper to update state
+               get()._hydratePlaylistVideos(id, allPlaylistVideos);
 
           } catch (error) {
               console.error(`Failed to load playlist ${id}:`, error);
-              set(produce((state: PlayerState) => {
-                   state.playlistLoading[id] = false;
-               }));
+              set(produce((state: PlayerState) => { state.playlistLoading[id] = false; }));
           }
        },
 
-
     }),
     {
-      name: 'vibeverse-player-storage', // name of the item in the storage (must be unique)
-      storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+      name: 'vibeverse-player-storage',
+      storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
-            // Persist only specific parts of the state
-            playlists: state.playlists,
+            // Only persist non-user-specific settings or non-sensitive data
             volume: state.volume,
             isMuted: state.isMuted,
             isRepeating: state.isRepeating,
             isShuffling: state.isShuffling,
-            playlistDetails: state.playlistDetails, // Cache video details
+             playlistDetails: state.playlistDetails, // Cache video details across sessions
+             // DO NOT persist userId, playlists, etc. Fetch them based on auth state.
         }),
-       // Optional: Custom hydration logic if needed after rehydration
-       // onRehydrateStorage: (state) => {
-       //   console.log("Hydration finished.")
-       //   return (state, error) => {
-       //     if (error) {
-       //       console.log('An error happened during hydration', error)
-       //     } else {
-       //       // state. // Perform actions after hydration
-       //     }
-       //   }
-       // }
+       onRehydrateStorage: (state) => {
+         console.log("Hydration starting...");
+         return (hydratedState, error) => {
+           if (error) {
+             console.error('Hydration error:', error);
+           } else {
+              console.log("Hydration complete.");
+             // Potentially trigger initial fetches based on auth state *after* hydration
+             // This is complex because auth state might not be ready yet.
+             // It's often better to handle initial data fetching in the AuthProvider effect.
+           }
+         };
+       },
     }
   )
 );
 
-// Fetch popular videos on initial load (outside the component lifecycle)
-// Ensure this runs only once, maybe using a flag or checking if searchResults are empty initially
-if (typeof window !== 'undefined') { // Make sure it runs only on the client
-    const initialState = usePlayerStore.getState();
-    if (initialState.searchResults.length === 0 && initialState.playlists.length === 0 && !initialState.activePlaylistId) {
-       usePlayerStore.getState().fetchPopularVideos();
-    }
-}
+// Initial fetch logic moved to AuthProvider useEffect to ensure auth state is ready
+// if (typeof window !== 'undefined') {
+//     const initialState = usePlayerStore.getState();
+//     if (!initialState.userId && initialState.searchResults.length === 0 && initialState.playlists.length === 0 && !initialState.activePlaylistId) {
+//        usePlayerStore.getState().fetchPopularVideos();
+//     }
+// }
