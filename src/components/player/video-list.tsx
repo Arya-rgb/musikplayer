@@ -6,7 +6,7 @@ import { usePlayerStore } from '@/store/player-store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
-import { Play, Plus, Trash2, ListMusic } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, ListMusic } from 'lucide-react'; // Import Pause
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { YouTubeVideoSearchResultItem } from '@/services/youtube';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
