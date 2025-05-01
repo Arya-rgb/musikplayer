@@ -1,5 +1,5 @@
 
-import type {Metadata, Viewport} from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google'; // Use Inter for a modern feel
 import './globals.css';
 import { cn } from '@/lib/utils';
@@ -9,24 +9,24 @@ import { VideoPlayer } from '@/components/player/video-player';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/auth-context'; // Import AuthProvider
 
-
 const inter = Inter({
   variable: '--font-inter',
   subsets: ['latin'],
 });
 
+// Metadata and Viewport remain server-side compatible and can be exported
 export const metadata: Metadata = {
   title: 'VibeVerse - Your Music Universe',
   description: 'Stream YouTube Music with style.',
   manifest: '/manifest.json', // Link to the manifest file
 };
 
-// Add viewport configuration for PWA
 export const viewport: Viewport = {
   themeColor: '#008080', // Match theme-color in manifest.json
   width: 'device-width',
   initialScale: 1,
 };
+
 
 export default function RootLayout({
   children,
@@ -42,11 +42,13 @@ export default function RootLayout({
           inter.variable
         )}
       >
-        <AuthProvider> {/* Wrap content with AuthProvider */}
+        <AuthProvider> {/* Wrap entire content structure with AuthProvider */}
           <Header />
           <div className="flex flex-1 overflow-hidden"> {/* Main content area */}
             <Sidebar />
-            <main className="flex-1 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-24 md:pb-28"> {/* Add more padding-bottom for player */}
+            {/* Adjust main content area to take remaining space */}
+            <main className="flex-1 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
+              {/* Removed redundant padding here, added inside video-list */}
               {children}
             </main>
           </div>
@@ -59,3 +61,5 @@ export default function RootLayout({
   );
 }
 
+// Remove separate export of metadata and viewport, keep them at the top level
+// export { metadata, viewport };

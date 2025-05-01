@@ -178,10 +178,11 @@ export function VideoList() {
          {playlistName || (searchNextPageToken ? 'Search Results' : 'Popular Videos')} {/* Adjust title based on pagination context */}
          {isGeneralLoading && !isFetchingNextPage && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />} {/* Show spinner only for initial load */}
       </h2>
-       {/* Adjust height considering header and player height, more reduction on mobile */}
-       {/* Add extra padding-bottom (pb-28 or more) to ensure "Load More" is visible above the player */}
-      <ScrollArea className="h-[calc(100vh-144px-7rem)] md:h-[calc(100vh-160px-2rem)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent pb-32 md:pb-28"> {/* Increased bottom padding */}
-        <div className="space-y-2 md:space-y-3">
+       {/* Adjust height considering header and player height */}
+      {/* Use simpler height calc, add padding inside the child div */}
+      <ScrollArea className="h-[calc(100vh-144px)] md:h-[calc(100vh-160px)] pr-2 md:pr-4 scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
+        {/* Add padding bottom here to ensure "Load More" is visible above the player */}
+        <div className="space-y-2 md:space-y-3 pb-24 md:pb-28">
           {authLoading ? renderSkeleton(8) :
            isGeneralLoading && !isFetchingNextPage ? renderSkeleton(8) : ( // Show skeleton only on initial load
             displayVideos.length > 0 ? displayVideos.map((video) => {
