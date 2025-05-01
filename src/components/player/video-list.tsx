@@ -1,4 +1,3 @@
-
 // src/components/player/video-list.tsx
 'use client';
 
@@ -15,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
+import type { PlayerTrackInfo } from '@/store/player-store'; // Import PlayerTrackInfo
 
 export function VideoList() {
    const { user, loading: authLoading } = useAuth(); // Get user and auth loading state
@@ -47,7 +47,7 @@ export function VideoList() {
     };
 
 
-  const handlePlayVideo = (video: YouTubeVideoSearchResultItem) => {
+  const handlePlayVideo = (video: PlayerTrackInfo) => { // Use PlayerTrackInfo
     // Determine the correct list (search results or currently viewed playlist videos)
     const listToUse = activePlaylistId ? currentPlaylistVideos : searchResults;
 
@@ -74,7 +74,7 @@ export function VideoList() {
 
 
   // Handles adding/removing from ANY playlist via the popover checkbox
-  const handlePlaylistCheckboxChange = async (video: YouTubeVideoSearchResultItem, playlistId: string, checked: boolean | 'indeterminate') => {
+  const handlePlaylistCheckboxChange = async (video: PlayerTrackInfo, playlistId: string, checked: boolean | 'indeterminate') => { // Use PlayerTrackInfo
      if (!user) return; // Must be logged in
      console.log(`Checkbox change for video ${video.id.videoId} in playlist ${playlistId}. Checked: ${checked}`);
      // Prevent action if already loading for this specific operation
@@ -143,16 +143,22 @@ export function VideoList() {
           {authLoading ? renderSkeleton(8) : // Show skeletons during auth check
            isGeneralLoading ? renderSkeleton(8) : ( // Show skeletons during data fetch
             displayVideos.length > 0 ? displayVideos.map((video) => {
+                if (!video?.id?.videoId) {
+                    console.warn("Skipping rendering video with missing ID:", video);
+                    return null; // Skip rendering if videoId is missing
+                }
                 const videoId = video.id.videoId;
-                const isUpdatingThisVideo = isUpdatingAnyPlaylist(videoId); // Check loading state for this video
+                // const isUpdatingThisVideo = isUpdatingAnyPlaylist(videoId); // Check loading state for this video
                 const isRemoveLoading = activePlaylistId ? (playlistLoading[activePlaylistId] || playlistLoading[`remove_${activePlaylistId}_${videoId}`]) : false;
                 const isAddPopoverLoading = playlists.some(p => playlistLoading[`add_${p.id}_${videoId}`] || playlistLoading[`remove_${p.id}_${videoId}`]);
+                 const isCurrentPlaying = currentTrack?.id.videoId === videoId;
+
 
                 return (
                 <Card
                   key={videoId}
                   className={`flex items-center p-3 gap-3 transition-colors hover:bg-accent/10 ${
-                    currentTrack?.id.videoId === videoId ? 'border-accent bg-accent/5' : 'bg-card/50'
+                    isCurrentPlaying ? 'border-accent bg-accent/5' : 'bg-card/50'
                   }`}
                 >
                   <Image
@@ -167,8 +173,8 @@ export function VideoList() {
                     <p className="text-sm font-medium truncate text-foreground">{video.snippet.title}</p>
                     <p className="text-xs text-muted-foreground truncate">{video.snippet.channelTitle}</p>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)} disabled={!video.id?.videoId}>
-                     {currentTrack?.id.videoId === videoId && isPlaying ? (
+                  <Button variant="ghost" size="icon" onClick={() => handlePlayVideo(video)}>
+                     {isCurrentPlaying && isPlaying ? (
                         <Pause className="w-5 h-5 text-accent" />
                       ) : (
                          <Play className="w-5 h-5 text-accent fill-current" />
@@ -267,5 +273,3 @@ export function VideoList() {
     </div>
   );
 }
-
-```
