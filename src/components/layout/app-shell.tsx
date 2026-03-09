@@ -25,8 +25,8 @@ export function AppShell({ children }: AppShellProps) {
         onMobileLibraryOpenChange={setIsLibraryOpen}
       />
 
-      {/* Main content area */}
-      <main className="flex-1 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
+      {/* Main content area — min-h-0 is required for overflow-y-auto to work in flexbox */}
+      <main className="flex-1 min-h-0 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
         {children}
       </main>
 

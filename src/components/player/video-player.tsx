@@ -166,11 +166,33 @@ export function VideoPlayer() {
     /* On mobile: sit above bottom nav (64px), so bottom = 64px */
     <div className={cn(
       'fixed left-0 right-0 z-50',
-      'bottom-14 md:bottom-0', // above bottom nav on mobile
+      'bottom-14 md:bottom-0',
       'h-[72px] md:h-[90px]',
       'bg-[#181818] border-t border-white/10',
-      'flex items-center px-3 md:px-4 gap-2 md:gap-0'
+      'flex items-center px-3 md:px-4 gap-2 md:gap-0',
+      'relative' // for the progress bar positioning
     )}>
+      {/* Mobile progress bar — thin line at the very top, tappable */}
+      <div
+        className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 md:hidden cursor-pointer group/prog"
+        onClick={(e) => {
+          if (!currentTrack || duration === 0) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const newPlayed = clickX / rect.width;
+          setPlayed(newPlayed);
+          playerRef.current?.seekTo(newPlayed);
+        }}
+      >
+        {/* Filled portion */}
+        <div
+          className="h-full bg-[#1DB954] transition-none relative"
+          style={{ width: `${played * 100}%` }}
+        >
+          {/* Thumb dot — appears on hover */}
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white opacity-0 group-hover/prog:opacity-100 transition-opacity shadow-md" />
+        </div>
+      </div>
       {/* Hidden ReactPlayer */}
       {currentTrack && (
         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '1px', height: '1px', pointerEvents: 'none', opacity: 0 }}>
