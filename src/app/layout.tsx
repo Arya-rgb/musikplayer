@@ -35,7 +35,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body
         className={cn(
-          'min-h-screen bg-background font-sans antialiased flex flex-col overflow-hidden',
+          'h-screen bg-background font-sans antialiased flex flex-col overflow-hidden',
           inter.variable
         )}
       >
