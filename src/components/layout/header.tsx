@@ -1,9 +1,8 @@
-
 // src/components/layout/header.tsx
 'use client';
 
 import React, { useState } from 'react';
-import { Music, Search, LogOut, LogIn } from 'lucide-react'; // Keep needed icons
+import { Music, Search, LogOut, LogIn, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePlayerStore } from '@/store/player-store';
@@ -26,14 +25,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { LoginForm } from '@/components/auth/login-form';
-// Removed useIsMobile and related Sheet imports/logic
+import { cn } from '@/lib/utils';
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const { searchVideos } = usePlayerStore();
   const { user, loading, signOut } = useAuth();
-  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false); // State for dialog
-  // Removed isMobile and sheet state/logic
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +41,8 @@ export function Header() {
   };
 
   const getInitials = (email?: string | null) => {
-    if (!email) return "?";
-    const parts = email.split('@')[0];
-    return parts.substring(0, 2).toUpperCase();
+    if (!email) return '?';
+    return email.split('@')[0].substring(0, 2).toUpperCase();
   };
 
   const handleLoginSuccess = () => {
@@ -54,55 +51,87 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6 lg:px-8 h-16"> {/* Fixed height */}
-      {/* Mobile Sidebar Trigger (now handled within Sidebar component) - Removed button here */}
+    <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-[#121212]/90 backdrop-blur-md border-b border-white/[0.06] h-16 md:px-6">
+      {/* Left: Logo (desktop) or spacer (mobile) */}
+      <div className="flex items-center gap-3">
+        {/* Nav arrows - desktop only */}
+        <div className="hidden md:flex items-center gap-1">
+          <button
+            onClick={() => window.history.back()}
+            className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+            aria-label="Go back"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => window.history.forward()}
+            className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+            aria-label="Go forward"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
 
-      {/* Logo and Title - Add padding for mobile menu button space */}
-      <div className="flex items-center gap-2 pl-10 md:pl-0"> {/* Add pl-10 for mobile, md:pl-0 for desktop */}
-        <Music className="w-6 h-6 text-accent" />
-        <h1 className="text-xl font-bold tracking-tight text-foreground hidden sm:block">VibeVerse</h1> {/* Hide title on very small screens */}
+        {/* Mobile logo */}
+        <div className="flex items-center gap-2 md:hidden">
+          <Music className="w-5 h-5 text-[#1DB954]" />
+          <span className="text-base font-bold text-white tracking-tight">VibeVerse</span>
+        </div>
       </div>
 
-      {/* Search Form */}
-      <form onSubmit={handleSearch} className="flex items-center gap-2 w-full max-w-xs sm:max-w-sm md:max-w-md mx-auto px-2"> {/* Centered search, adjusted width */}
-        <Input
-          type="search"
-          placeholder="Search..." // Shorter placeholder
-          className="flex-1 h-9" // Smaller height
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <Button type="submit" size="icon" variant="ghost" className="h-9 w-9"> {/* Smaller button */}
-          <Search className="w-5 h-5" />
-          <span className="sr-only">Search</span>
-        </Button>
+      {/* Center: search bar (desktop) */}
+      <form
+        onSubmit={handleSearch}
+        className="hidden md:flex items-center gap-2 w-full max-w-sm mx-auto"
+      >
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#b3b3b3]" />
+          <Input
+            type="search"
+            placeholder="What do you want to listen to?"
+            className={cn(
+              'pl-9 h-10 rounded-full border-none bg-white text-black placeholder:text-gray-500',
+              'focus-visible:ring-1 focus-visible:ring-white/50 focus:bg-white',
+              'text-sm'
+            )}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="sr-only">Search</button>
       </form>
 
-      {/* Auth Section */}
-      <div className="flex items-center gap-2 sm:gap-4"> {/* Reduced gap */}
+      {/* Right: Auth */}
+      <div className="flex items-center gap-2">
         {loading ? (
-          <div className="text-xs sm:text-sm text-muted-foreground">Loading...</div>
+          <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse" />
         ) : user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || "User"} />
-                  <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+              <Button
+                variant="ghost"
+                className="relative h-9 w-9 rounded-full p-0 hover:opacity-80 transition-opacity"
+              >
+                <Avatar className="h-9 w-9 border-2 border-white/20">
+                  <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'User'} />
+                  <AvatarFallback className="bg-[#282828] text-white text-xs font-bold">
+                    {getInitials(user.email)}
+                  </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuContent className="w-52 bg-[#282828] border-white/10 text-white" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.displayName || "User"}</p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {user.email}
-                  </p>
+                <div className="flex flex-col space-y-0.5">
+                  <p className="text-sm font-semibold">{user.displayName || 'User'}</p>
+                  <p className="text-xs text-[#b3b3b3]">{user.email}</p>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut}>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem
+                onClick={signOut}
+                className="text-[#b3b3b3] hover:text-white focus:text-white focus:bg-white/10 cursor-pointer"
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>
@@ -111,15 +140,17 @@ export function Header() {
         ) : (
           <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                 <LogIn className="mr-1.5 h-4 w-4" /> {/* Adjusted margin */}
-                 <span className="hidden sm:inline">Login</span> {/* Hide text on small screens */}
+              <Button
+                className="rounded-full px-5 h-9 text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors"
+              >
+                <LogIn className="mr-1.5 h-4 w-4" />
+                <span>Log in</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] bg-[#121212] border-white/10">
               <DialogHeader>
-                <DialogTitle>Welcome Back</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-white">Welcome Back</DialogTitle>
+                <DialogDescription className="text-[#b3b3b3]">
                   Sign in to access your VibeVerse.
                 </DialogDescription>
               </DialogHeader>

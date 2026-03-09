@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ListMusic, Plus, Trash2, Loader2, Menu, X, LoaderCircle } from 'lucide-react'; // Removed Wand2
+import { ListMusic, Plus, Trash2, Loader2, Music2, Search, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,22 +35,23 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"; // Import Sheet components
+} from "@/components/ui/sheet";
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card } from '@/components/ui/card';
-import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile hook
-import { cn } from '@/lib/utils'; // Import cn for conditional classes
+import { cn } from '@/lib/utils';
 
-export function Sidebar() {
+interface SidebarProps {
+  isMobileLibraryOpen?: boolean;
+  onMobileLibraryOpenChange?: (open: boolean) => void;
+}
+
+export function Sidebar({ isMobileLibraryOpen = false, onMobileLibraryOpenChange }: SidebarProps) {
   const {
     playlists,
     addPlaylist,
     removePlaylist,
     setActivePlaylist,
     activePlaylistId,
-    loadPlaylist,
     playlistLoading,
     fetchUserPlaylists,
     userId,
@@ -58,21 +59,13 @@ export function Sidebar() {
   const { user, loading: authLoading } = useAuth();
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
-  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false); // State for mobile sheet
-  const isMobile = useIsMobile(); // Check if mobile view
 
-  // Loading state specifically for playlist creation
   const isAddingPlaylist = playlistLoading['add'] ?? false;
-  // Loading state for initial playlist fetch
   const isFetchingPlaylists = playlistLoading['fetch'] ?? false;
 
-  // Fetch playlists when user is authenticated
   useEffect(() => {
-    if (user && userId) {
-      // Check if playlists are already loaded or being loaded to avoid redundant fetches
-      if (playlists.length === 0 && !isFetchingPlaylists) {
-        fetchUserPlaylists(userId);
-      }
+    if (user && userId && playlists.length === 0 && !isFetchingPlaylists) {
+      fetchUserPlaylists(userId);
     }
   }, [user, userId, fetchUserPlaylists, playlists.length, isFetchingPlaylists]);
 
@@ -80,243 +73,223 @@ export function Sidebar() {
     if (newPlaylistName.trim() && !isAddingPlaylist) {
       await addPlaylist(newPlaylistName.trim());
       setNewPlaylistName('');
-      setIsCreatingPlaylist(false); // Close dialog on success
-      if (isMobile) setIsMobileSheetOpen(false); // Close sheet on mobile
+      setIsCreatingPlaylist(false);
+      onMobileLibraryOpenChange?.(false);
     }
   };
 
   const handleSelectPlaylist = (playlistId: string | null) => {
     setActivePlaylist(playlistId);
-    if (playlistId) {
-      // loadPlaylist is called by setActivePlaylist effect if id is not null
-    } else {
-      // Optionally clear current playlist videos if switching to search
-      // usePlayerStore.setState({ currentPlaylistVideos: [] });
-    }
-     if (isMobile) setIsMobileSheetOpen(false); // Close sheet on mobile after selection
+    onMobileLibraryOpenChange?.(false);
   };
 
-   const handleDeletePlaylist = async (playlistId: string) => {
-       await removePlaylist(playlistId);
-       // No need to close sheet here, AlertDialog handles it
-   }
+  const handleDeletePlaylist = async (playlistId: string) => {
+    await removePlaylist(playlistId);
+  };
 
   const renderPlaylistSkeletons = (count: number) => (
-    <div className="space-y-1">
+    <div className="space-y-1 px-2">
       {Array.from({ length: count }).map((_, index) => (
-        <div key={`skel-${index}`} className="flex items-center space-x-2 h-10 px-2">
-          <Skeleton className="h-4 flex-1 rounded" />
-          <Skeleton className="w-6 h-6 rounded" />
+        <div key={`skel-${index}`} className="flex items-center space-x-3 h-12 px-2">
+          <Skeleton className="h-10 w-10 rounded bg-white/10 flex-shrink-0" />
+          <div className="flex-1 space-y-1">
+            <Skeleton className="h-3 w-3/4 bg-white/10 rounded" />
+            <Skeleton className="h-3 w-1/2 bg-white/10 rounded" />
+          </div>
         </div>
       ))}
     </div>
   );
 
-  const renderAuthLoading = () => (
-     <div className="flex flex-col h-full p-4 space-y-2">
-        <div className="flex items-center gap-2 mb-4 p-2">
-           <ListMusic className="w-5 h-5" />
-           <Skeleton className="h-6 w-24" />
+  const renderLibraryContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Library header */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2 text-[#b3b3b3] hover:text-white transition-colors cursor-default">
+          <ListMusic className="w-5 h-5" />
+          <span className="font-bold text-sm">Your Library</span>
         </div>
-        <Skeleton className="h-10 w-full mb-2" /> {/* Skeleton for Search Results */}
-         {/* Add Playlist Skeleton Card - Moved to top */}
-         <Card className="flex items-center justify-start px-3 h-10 gap-2 mb-1 text-muted-foreground border-dashed border-muted-foreground/50 cursor-wait opacity-50">
-             <Plus className="w-4 h-4" />
-             <span>New Playlist</span>
-         </Card>
-        <ScrollArea className="flex-1 -mx-4">
-           <div className="px-4">
-             {renderPlaylistSkeletons(3)}
-           </div>
-        </ScrollArea>
+        {user && (
+          <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
+            <DialogTrigger asChild>
+              <button
+                disabled={isFetchingPlaylists || isAddingPlaylist}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Create playlist"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[400px] bg-[#282828] border-white/10">
+              <DialogHeader>
+                <DialogTitle className="text-white">Create Playlist</DialogTitle>
+                <DialogDescription className="text-[#b3b3b3]">
+                  Give your playlist a name.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <Label htmlFor="playlist-name" className="text-sm text-[#b3b3b3] mb-2 block">Name</Label>
+                <Input
+                  id="playlist-name"
+                  value={newPlaylistName}
+                  onChange={(e) => setNewPlaylistName(e.target.value)}
+                  className="bg-[#3e3e3e] border-none text-white placeholder:text-[#727272] focus-visible:ring-white/30"
+                  placeholder="My playlist..."
+                  autoFocus
+                  disabled={isAddingPlaylist}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlaylist(); }}
+                />
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="ghost" className="text-white hover:bg-white/10" disabled={isAddingPlaylist}>
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button
+                  onClick={handleAddPlaylist}
+                  disabled={!newPlaylistName.trim() || isAddingPlaylist}
+                  className="rounded-full bg-[#1DB954] text-black font-bold hover:bg-[#1ed760] border-none"
+                >
+                  {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Create
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      {/* Search results item */}
+      <div className="px-2">
+        <button
+          onClick={() => handleSelectPlaylist(null)}
+          className={cn(
+            'w-full flex items-center gap-3 px-2 py-2 rounded-md transition-colors text-left',
+            !activePlaylistId
+              ? 'bg-[#282828] text-white'
+              : 'text-[#b3b3b3] hover:text-white hover:bg-white/5'
+          )}
+        >
+          <div className="w-10 h-10 rounded bg-gradient-to-br from-[#450af5] to-[#c4efd9] flex items-center justify-center flex-shrink-0">
+            <Search className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold truncate">Search Results</p>
+            <p className="text-xs text-[#b3b3b3]">YouTube</p>
+          </div>
+        </button>
+      </div>
+
+      {/* Playlist list */}
+      <ScrollArea className="flex-1 mt-1 scrollbar">
+        <div className="px-2 pb-4 space-y-0.5">
+          {authLoading || isFetchingPlaylists && playlists.length === 0 ? (
+            renderPlaylistSkeletons(4)
+          ) : !user ? (
+            <div className="px-4 py-6 text-center">
+              <ListMusic className="w-8 h-8 text-[#b3b3b3] mx-auto mb-2" />
+              <p className="text-sm text-[#b3b3b3]">Log in to see your library</p>
+            </div>
+          ) : playlists.length === 0 && !isFetchingPlaylists ? (
+            <div className="px-4 py-6 text-center">
+              <p className="text-xs text-[#b3b3b3]">No playlists yet.</p>
+            </div>
+          ) : (
+            playlists.map((playlist) => {
+              if (!playlist?.id) return null;
+              const isActive = activePlaylistId === playlist.id;
+              const isLoading = playlistLoading[playlist.id] ?? false;
+              return (
+                <div key={playlist.id} className="group flex items-center gap-3 px-2 py-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
+                  onClick={() => !isLoading && handleSelectPlaylist(playlist.id!)}>
+                  <div className={cn(
+                    'w-10 h-10 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+                    isActive ? 'bg-[#1DB954]/20' : 'bg-[#282828]'
+                  )}>
+                    <Music2 className={cn('w-5 h-5', isActive ? 'text-[#1DB954]' : 'text-[#b3b3b3]')} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn('text-sm font-semibold truncate', isActive ? 'text-[#1DB954]' : 'text-white')}>
+                      {isLoading ? <Loader2 className="w-3 h-3 inline mr-1 animate-spin" /> : null}
+                      {playlist.name}
+                    </p>
+                    <p className="text-xs text-[#b3b3b3]">Playlist</p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded text-[#b3b3b3] hover:text-red-400 transition-all"
+                        disabled={isLoading}
+                        aria-label="Delete playlist"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-[#282828] border-white/10">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-white">Delete playlist?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-[#b3b3b3]">
+                          This will permanently delete "{playlist.name}".
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-transparent border-white/20 text-white hover:bg-white/10">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeletePlaylist(playlist.id!)}
+                          className="bg-[#1DB954] text-black font-bold hover:bg-[#1ed760] border-none"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 
-
-   const renderNoAuth = () => (
-      <div className="flex flex-col h-full p-4 space-y-2">
-         <div className="flex items-center gap-2 mb-4 p-2">
-           <ListMusic className="w-5 h-5" />
-           <span className="text-lg font-semibold">Playlists</span>
-         </div>
-         {/* Keep structure but disabled */}
-         <Button variant="ghost" className="justify-start w-full mb-1 cursor-not-allowed opacity-50">
-            Search Results
-         </Button>
-          <Dialog open={false}>
-             <DialogTrigger asChild>
-                 <Button variant="outline" className="justify-start w-full gap-2 text-muted-foreground border-dashed border-muted-foreground/50 cursor-not-allowed mb-2">
-                    <Plus className="w-4 h-4" />
-                    <span>New Playlist</span>
-                </Button>
-             </DialogTrigger>
-         </Dialog>
-          <div className="flex flex-col items-center justify-center h-full text-center p-4 border-t mt-2">
-            <ListMusic className="w-8 h-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">Please log in</p>
-            <p className="text-xs text-muted-foreground/70">to manage playlists.</p>
-          </div>
-      </div>
-    );
-
-   // Extracted content for reuse in desktop and mobile sheet
-   const renderSidebarContent = () => (
-       <div className="flex flex-col h-full p-4 space-y-2">
-         <div className="flex items-center justify-between p-2">
-           <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
-             <ListMusic className="w-5 h-5" />
-             Playlists
-           </h2>
-           {isFetchingPlaylists && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />}
-         </div>
-
-         {/* Search Results "Playlist" */}
-         <Button
-           variant={!activePlaylistId ? 'secondary' : 'ghost'}
-           className="justify-start w-full mb-1" // Added margin bottom
-           onClick={() => handleSelectPlaylist(null)} // Use null for search
-         >
-           Search Results
-         </Button>
-
-           {/* Special Button to Add Playlist - Moved to top */}
-            <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
-              <DialogTrigger asChild>
-                  <Button variant="outline" className={cn(
-                     "justify-start w-full gap-2 text-muted-foreground border-dashed border-muted-foreground/50 hover:border-accent hover:text-accent cursor-pointer transition-colors mb-2", // Added margin bottom
-                     (isFetchingPlaylists || isAddingPlaylist) && "opacity-50 cursor-wait" // Dim if playlists are loading initially or adding
-                   )}
-                   disabled={isFetchingPlaylists || isAddingPlaylist} // Disable trigger when loading/adding
-                   >
-                      {isAddingPlaylist ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4" />}
-                      <span>New Playlist</span>
-                  </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Playlist</DialogTitle>
-                  <DialogDescription>
-                    Enter a name for your new playlist.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="playlist-name" className="text-right">
-                      Name
-                    </Label>
-                     <div className="col-span-3"> {/* Removed flex items-center gap-2 */}
-                        <Input
-                          id="playlist-name"
-                          value={newPlaylistName}
-                          onChange={(e) => setNewPlaylistName(e.target.value)}
-                          className="w-full" // Ensure input takes full width
-                          autoFocus
-                          disabled={isAddingPlaylist}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlaylist(); }} // Add playlist on Enter key
-                        />
-                        {/* Removed pre-fill button */}
-                     </div>
-                  </div>
-                   {/* Removed pre-fill hint paragraph */}
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="secondary" disabled={isAddingPlaylist}>Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit" onClick={handleAddPlaylist} disabled={!newPlaylistName.trim() || isAddingPlaylist}>
-                     {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
-                    Create Playlist
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-          </Dialog>
-
-         <ScrollArea className="flex-1 -mx-4 border-t pt-2"> {/* Added border-t and pt-2 */}
-           <div className="px-4 space-y-1">
-             {isFetchingPlaylists && playlists.length === 0 ? (
-               renderPlaylistSkeletons(3)
-             ) : playlists.length === 0 && !isFetchingPlaylists ? (
-               <p className="text-xs text-muted-foreground px-2 py-4 text-center">No playlists created yet.</p>
-             ) : (
-               playlists.map((playlist) => {
-                 if (!playlist?.id) return null; // Handle potential missing ID or playlist object
-                 return (
-                 <div key={playlist.id} className="flex items-center group">
-                   <Button
-                     variant={activePlaylistId === playlist.id ? 'secondary' : 'ghost'}
-                     className="justify-start flex-1 text-left truncate pr-1" // Added pr-1
-                     onClick={() => handleSelectPlaylist(playlist.id!)} // Ensure id exists
-                     disabled={playlistLoading[playlist.id!] ?? false} // Disable during delete
-                   >
-                     {playlistLoading[playlist.id!] ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                     {playlist.name}
-                   </Button>
-                   <AlertDialog>
-                     <AlertDialogTrigger asChild>
-                       <Button
-                         variant="ghost"
-                         size="icon"
-                         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive w-8 h-8 flex-shrink-0" // Ensure size
-                         disabled={playlistLoading[playlist.id!] ?? false} // Disable during delete
-                       >
-                         <Trash2 className="w-4 h-4" />
-                       </Button>
-                     </AlertDialogTrigger>
-                     <AlertDialogContent>
-                       <AlertDialogHeader>
-                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                         <AlertDialogDescription>
-                           This action cannot be undone. This will permanently delete the playlist "{playlist.name}".
-                         </AlertDialogDescription>
-                       </AlertDialogHeader>
-                       <AlertDialogFooter>
-                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                         <AlertDialogAction
-                           onClick={() => handleDeletePlaylist(playlist.id!)} // Ensure id exists
-                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                         >
-                           Delete
-                         </AlertDialogAction>
-                       </AlertDialogFooter>
-                     </AlertDialogContent>
-                   </AlertDialog>
-                 </div>
-               )}
-              )
-             )}
-           </div>
-         </ScrollArea>
-
-       </div>
-   );
-
-   if (isMobile) {
-      return (
-        <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
-          <SheetTrigger asChild>
-            {/* Button in the header will trigger this */}
-             <Button variant="ghost" size="icon" className="md:hidden fixed top-4 left-4 z-50 bg-background/80 backdrop-blur">
-                 <Menu className="h-6 w-6" />
-                 <span className="sr-only">Open Menu</span>
-             </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0 bg-card text-card-foreground flex flex-col"> {/* Use flex col */}
-            <SheetHeader className="p-4 border-b">
-              <SheetTitle className="flex items-center gap-2">
-                  <ListMusic className="w-5 h-5"/> Playlists
-              </SheetTitle>
-            </SheetHeader>
-             {authLoading ? renderAuthLoading() : !user ? renderNoAuth() : renderSidebarContent()}
-          </SheetContent>
-        </Sheet>
-      );
-   }
-
-
-  // --- Desktop Sidebar ---
   return (
-    <aside className="hidden md:flex flex-col w-64 border-r bg-card text-card-foreground">
-       {authLoading ? renderAuthLoading() : !user ? renderNoAuth() : renderSidebarContent()}
-    </aside>
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-60 bg-[#0f0f0f] text-white shrink-0">
+        {/* Nav items */}
+        <nav className="p-3 space-y-1 border-b border-white/5">
+          <button
+            onClick={() => handleSelectPlaylist(null)}
+            className={cn(
+              'w-full flex items-center gap-4 px-3 py-2.5 rounded-md text-sm font-bold transition-colors',
+              !activePlaylistId ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
+            )}
+          >
+            <Home className={cn('w-5 h-5 shrink-0', !activePlaylistId ? 'text-white' : '')} fill={!activePlaylistId ? 'currentColor' : 'none'} />
+            Home
+          </button>
+        </nav>
+
+        {/* Library */}
+        <div className="flex-1 overflow-hidden flex flex-col mt-2">
+          {renderLibraryContent()}
+        </div>
+      </aside>
+
+      {/* Mobile sheet (triggered from BottomNav → AppShell) */}
+      <Sheet open={isMobileLibraryOpen} onOpenChange={onMobileLibraryOpenChange}>
+        <SheetContent side="left" className="w-80 p-0 bg-[#121212] border-r border-white/10 text-white flex flex-col">
+          <SheetHeader className="p-4 border-b border-white/5">
+            <SheetTitle className="flex items-center gap-2 text-white">
+              <ListMusic className="w-5 h-5 text-[#1DB954]" /> Your Library
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-hidden">
+            {renderLibraryContent()}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

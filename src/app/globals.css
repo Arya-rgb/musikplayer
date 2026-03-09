@@ -1,81 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
   font-family: 'Inter', sans-serif;
-  @apply scrollbar-thin scrollbar-thumb-accent scrollbar-track-background;
 }
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%; /* #121212 adjusted slightly */
-    --foreground: 0 0% 66.3%; /* #A9A9A9 */
-    --card: 240 10% 7.9%; /* Darker card background */
-    --card-foreground: 0 0% 80%; /* Lighter card text */
-    --popover: 240 10% 3.9%; /* Match background */
-    --popover-foreground: 0 0% 80%; /* Match card foreground */
-    --primary: 180 100% 25.1%; /* #008080 Teal */
-    --primary-foreground: 0 0% 98%; /* White text on Teal */
-    --secondary: 240 4% 15%; /* Darker gray for secondary elements */
-    --secondary-foreground: 0 0% 90%; /* Lighter gray text */
-    --muted: 240 4% 10%; /* Even darker muted */
-    --muted-foreground: 0 0% 45.1%; /* Muted text color */
-    --accent: 180 100% 25.1%; /* Teal */
-    --accent-foreground: 0 0% 98%; /* White text on Teal */
+    /* Spotify-inspired dark palette */
+    --background: 0 0% 7%;              /* #121212 */
+    --foreground: 0 0% 100%;            /* #FFFFFF */
+    --card: 0 0% 9.4%;                  /* #181818 */
+    --card-foreground: 0 0% 100%;       /* #FFFFFF */
+    --popover: 0 0% 11%;                /* #1C1C1C */
+    --popover-foreground: 0 0% 100%;
+    --primary: 141 76% 42%;             /* #1DB954 Spotify Green */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 15.7%;           /* #282828 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 15.7%;               /* #282828 */
+    --muted-foreground: 0 0% 70%;      /* #B3B3B3 */
+    --accent: 141 76% 42%;             /* #1DB954 Spotify Green */
+    --accent-foreground: 0 0% 0%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 20%; /* Slightly lighter border */
-    --input: 240 4% 15%; /* Match secondary */
-    --ring: 180 100% 35.1%; /* Brighter Teal for ring */
-    --chart-1: 180 70% 50%;
-    --chart-2: 200 60% 45%;
-    --chart-3: 220 80% 55%;
-    --chart-4: 240 65% 60%;
-    --chart-5: 260 75% 55%;
+    --border: 0 0% 20%;
+    --input: 0 0% 15.7%;
+    --ring: 141 76% 42%;
     --radius: 0.5rem;
-    --sidebar-background: 240 10% 7.9%; /* Match card background */
-    --sidebar-foreground: 0 0% 80%; /* Match card foreground */
-    --sidebar-primary: 180 100% 25.1%; /* Teal */
-    --sidebar-primary-foreground: 0 0% 98%; /* White on Teal */
-    --sidebar-accent: 240 4% 15%; /* Match secondary */
-    --sidebar-accent-foreground: 0 0% 90%; /* Match secondary foreground */
-    --sidebar-border: 240 4% 20%; /* Match border */
-    --sidebar-ring: 180 100% 35.1%; /* Match ring */
+
+    --sidebar-background: 0 0% 5.9%;   /* #0F0F0F Spotify darker sidebar */
+    --sidebar-foreground: 0 0% 70%;
+    --sidebar-primary: 141 76% 42%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 15.7%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 141 76% 42%;
   }
+
   .dark {
-    --background: 240 10% 3.9%; /* #121212 adjusted slightly */
-    --foreground: 0 0% 66.3%; /* #A9A9A9 */
-    --card: 240 10% 7.9%; /* Darker card background */
-    --card-foreground: 0 0% 80%; /* Lighter card text */
-    --popover: 240 10% 3.9%; /* Match background */
-    --popover-foreground: 0 0% 80%; /* Match card foreground */
-    --primary: 180 100% 25.1%; /* #008080 Teal */
-    --primary-foreground: 0 0% 98%; /* White text on Teal */
-    --secondary: 240 4% 15%; /* Darker gray for secondary elements */
-    --secondary-foreground: 0 0% 90%; /* Lighter gray text */
-    --muted: 240 4% 10%; /* Even darker muted */
-    --muted-foreground: 0 0% 45.1%; /* Muted text color */
-    --accent: 180 100% 25.1%; /* Teal */
-    --accent-foreground: 0 0% 98%; /* White text on Teal */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 9.4%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 141 76% 42%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 15.7%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 15.7%;
+    --muted-foreground: 0 0% 70%;
+    --accent: 141 76% 42%;
+    --accent-foreground: 0 0% 0%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 20%; /* Slightly lighter border */
-    --input: 240 4% 15%; /* Match secondary */
-    --ring: 180 100% 35.1%; /* Brighter Teal for ring */
-    --chart-1: 180 70% 50%;
-    --chart-2: 200 60% 45%;
-    --chart-3: 220 80% 55%;
-    --chart-4: 240 65% 60%;
-    --chart-5: 260 75% 55%;
-    --sidebar-background: 240 10% 7.9%; /* Match card background */
-    --sidebar-foreground: 0 0% 80%; /* Match card foreground */
-    --sidebar-primary: 180 100% 25.1%; /* Teal */
-    --sidebar-primary-foreground: 0 0% 98%; /* White on Teal */
-    --sidebar-accent: 240 4% 15%; /* Match secondary */
-    --sidebar-accent-foreground: 0 0% 90%; /* Match secondary foreground */
-    --sidebar-border: 240 4% 20%; /* Match border */
-    --sidebar-ring: 180 100% 35.1%; /* Match ring */
+    --border: 0 0% 20%;
+    --input: 0 0% 15.7%;
+    --ring: 141 76% 42%;
+
+    --sidebar-background: 0 0% 5.9%;
+    --sidebar-foreground: 0 0% 70%;
+    --sidebar-primary: 141 76% 42%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 15.7%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 141 76% 42%;
   }
 }
 
@@ -88,35 +83,54 @@ body {
   }
 }
 
-/* Custom scrollbar styles */
 @layer utilities {
-  .scrollbar-thin {
-    scrollbar-width: thin;
+  /* Spotify-style card hover */
+  .spotify-card {
+    @apply bg-card rounded-lg p-4 transition-all duration-200 cursor-pointer hover:bg-secondary;
   }
-  .scrollbar-thumb-accent {
-    --tw-scrollbar-thumb: hsl(var(--accent));
+
+  /* Track row hover */
+  .track-row {
+    @apply flex items-center gap-3 px-4 py-2 rounded-md transition-colors duration-150 hover:bg-white/5 group cursor-pointer;
   }
-  .scrollbar-track-background {
-     --tw-scrollbar-track: hsl(var(--background));
+
+  /* Spotify green text */
+  .text-spotify {
+    color: hsl(141 76% 42%);
   }
-  .scrollbar-thumb-rounded {
-    scrollbar-thumb-radius: theme('borderRadius.full');
-  }
-   /* Webkit (Chrome, Safari, Edge) */
+
+  /* Scrollbar */
   .scrollbar::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   .scrollbar::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-    border-radius: theme('borderRadius.full');
+    background: transparent;
   }
   .scrollbar::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--accent));
-    border-radius: theme('borderRadius.full');
-    border: 2px solid hsl(var(--background));
+    background-color: hsl(0 0% 30%);
+    border-radius: 9999px;
   }
-   .scrollbar-hover::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--accent) / 0.8);
+  .scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(0 0% 50%);
+  }
+
+  /* Hide scrollbar but keep funcionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gradient overlays */
+  .bg-gradient-spotify {
+    background: linear-gradient(180deg, hsl(141 76% 25% / 0.3) 0%, hsl(0 0% 7%) 40%);
+  }
+
+  /* Seek bar slider - Spotify style */
+  .seek-bar [data-orientation="horizontal"] {
+    height: 4px;
   }
 }

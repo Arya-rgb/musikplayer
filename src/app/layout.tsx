@@ -1,32 +1,30 @@
 
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google'; // Use Inter for a modern feel
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/layout/header';
-import { Sidebar } from '@/components/layout/sidebar';
 import { VideoPlayer } from '@/components/player/video-player';
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/context/auth-context'; // Import AuthProvider
+import { AuthProvider } from '@/context/auth-context';
+import { AppShell } from '@/components/layout/app-shell';
 
 const inter = Inter({
   variable: '--font-inter',
   subsets: ['latin'],
 });
 
-// Metadata and Viewport remain server-side compatible and can be exported
 export const metadata: Metadata = {
   title: 'VibeVerse - Your Music Universe',
   description: 'Stream YouTube Music with style.',
-  manifest: '/manifest.json', // Link to the manifest file
+  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {
-  themeColor: '#008080', // Match theme-color in manifest.json
+  themeColor: '#1DB954',
   width: 'device-width',
   initialScale: 1,
 };
-
 
 export default function RootLayout({
   children,
@@ -34,25 +32,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // No extra whitespace before <html> tag
     <html lang="en" className="dark">
       <body
         className={cn(
-          'min-h-screen bg-background font-sans antialiased flex flex-col overflow-hidden', // Prevent body scroll
+          'min-h-screen bg-background font-sans antialiased flex flex-col overflow-hidden',
           inter.variable
         )}
       >
-        <AuthProvider> {/* Wrap entire content structure with AuthProvider */}
+        <AuthProvider>
           <Header />
-          <div className="flex flex-1 overflow-hidden"> {/* Main content area */}
-            <Sidebar />
-            {/* Adjust main content area to take remaining space */}
-            <main className="flex-1 overflow-y-auto scrollbar scrollbar-thumb-accent scrollbar-track-transparent">
-              {/* Removed redundant padding here, added inside video-list */}
-              {children}
-            </main>
-          </div>
-          {/* Video Player fixed at the bottom */}
+          <AppShell>
+            {children}
+          </AppShell>
+          {/* Video Player fixed at the bottom — above bottom nav on mobile */}
           <VideoPlayer />
           <Toaster />
         </AuthProvider>
@@ -60,6 +52,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-// Remove separate export of metadata and viewport, keep them at the top level
-// export { metadata, viewport };
