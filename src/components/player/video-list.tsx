@@ -10,6 +10,7 @@ import Image from 'next/image';
 import {
   Play, Pause, Plus, Trash2, ListMusic, Loader2, ChevronDown, Search, Clock
 } from 'lucide-react';
+
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -180,11 +181,8 @@ export function VideoList() {
         </div>
       )}
 
-      {/* Scrollable track list */}
-      <ScrollArea className="flex-1 px-0 scrollbar" style={{
-        height: 'calc(100vh - 200px)'
-      }}>
-        <div className="pb-36 md:pb-28">
+      {/* Track list – parent main handles scrolling */}
+      <div className="pb-44 md:pb-28">
           {authLoading || (isGeneralLoading && !isFetchingNextPage) ? (
             <div className="pt-2">{renderSkeleton(10)}</div>
           ) : displayVideos.length > 0 ? (
@@ -392,7 +390,6 @@ export function VideoList() {
             </div>
           )}
         </div>
-      </ScrollArea>
     </div>
   );
 }

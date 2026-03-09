@@ -277,17 +277,176 @@ export function Sidebar({ isMobileLibraryOpen = false, onMobileLibraryOpenChange
         </div>
       </aside>
 
-      {/* Mobile sheet (triggered from BottomNav → AppShell) */}
+      {/* Mobile sheet — bottom sheet */}
       <Sheet open={isMobileLibraryOpen} onOpenChange={onMobileLibraryOpenChange}>
-        <SheetContent side="left" className="w-80 p-0 bg-[#121212] border-r border-white/10 text-white flex flex-col">
-          <SheetHeader className="p-4 border-b border-white/5">
-            <SheetTitle className="flex items-center gap-2 text-white">
-              <ListMusic className="w-5 h-5 text-[#1DB954]" /> Your Library
+        <SheetContent
+          side="bottom"
+          className="p-0 bg-[#121212] border-t border-white/10 text-white flex flex-col rounded-t-2xl max-h-[82vh]"
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1 shrink-0">
+            <div className="w-10 h-1 rounded-full bg-white/20" />
+          </div>
+
+          {/* Header */}
+          <SheetHeader className="px-5 pt-1 pb-3 border-b border-white/5 shrink-0">
+            <SheetTitle className="flex items-center justify-between text-white text-lg font-bold">
+              <div className="flex items-center gap-2">
+                <ListMusic className="w-5 h-5 text-[#1DB954]" />
+                Your Library
+              </div>
+              {user && (
+                <Dialog open={isCreatingPlaylist} onOpenChange={setIsCreatingPlaylist}>
+                  <DialogTrigger asChild>
+                    <button
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-[#282828] text-[#b3b3b3] hover:text-white hover:bg-[#3e3e3e] transition-colors"
+                      aria-label="Create playlist"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[400px] bg-[#282828] border-white/10 mx-4">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Create Playlist</DialogTitle>
+                      <DialogDescription className="text-[#b3b3b3]">Give your playlist a name.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <Label htmlFor="mob-playlist-name" className="text-sm text-[#b3b3b3] mb-2 block">Name</Label>
+                      <Input
+                        id="mob-playlist-name"
+                        value={newPlaylistName}
+                        onChange={(e) => setNewPlaylistName(e.target.value)}
+                        className="bg-[#3e3e3e] border-none text-white placeholder:text-[#727272] focus-visible:ring-white/30"
+                        placeholder="My playlist..."
+                        autoFocus
+                        disabled={isAddingPlaylist}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlaylist(); }}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="ghost" className="text-white hover:bg-white/10" disabled={isAddingPlaylist}>Cancel</Button>
+                      </DialogClose>
+                      <Button
+                        onClick={handleAddPlaylist}
+                        disabled={!newPlaylistName.trim() || isAddingPlaylist}
+                        className="rounded-full bg-[#1DB954] text-black font-bold hover:bg-[#1ed760] border-none"
+                      >
+                        {isAddingPlaylist ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                        Create
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </SheetTitle>
           </SheetHeader>
-          <div className="flex-1 overflow-hidden">
-            {renderLibraryContent()}
+
+          {/* Search Results shortcut */}
+          <div className="px-4 pt-3 pb-1 shrink-0">
+            <button
+              onClick={() => handleSelectPlaylist(null)}
+              className={cn(
+                'w-full flex items-center gap-4 px-3 py-3 rounded-xl transition-colors text-left',
+                !activePlaylistId ? 'bg-[#1DB954]/15 border border-[#1DB954]/30' : 'bg-[#282828] hover:bg-[#333]'
+              )}
+            >
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#450af5] to-[#c4efd9] flex items-center justify-center shrink-0">
+                <Search className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className={cn('text-sm font-bold', !activePlaylistId ? 'text-[#1DB954]' : 'text-white')}>Search Results</p>
+                <p className="text-xs text-[#b3b3b3]">YouTube Videos</p>
+              </div>
+              {!activePlaylistId && <div className="ml-auto w-2 h-2 rounded-full bg-[#1DB954] shrink-0" />}
+            </button>
           </div>
+
+          {/* Playlists label */}
+          {user && playlists.length > 0 && (
+            <p className="px-5 pt-3 pb-1 text-xs font-bold tracking-widest uppercase text-[#b3b3b3] shrink-0">
+              Playlists
+            </p>
+          )}
+
+          {/* Scrollable list */}
+          <ScrollArea className="flex-1 overflow-y-auto">
+            <div className="px-4 pb-10 space-y-1">
+              {authLoading || (isFetchingPlaylists && playlists.length === 0) ? (
+                renderPlaylistSkeletons(4)
+              ) : !user ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <ListMusic className="w-10 h-10 text-[#b3b3b3] mb-3 opacity-40" />
+                  <p className="text-sm font-semibold text-white">Log in to see your library</p>
+                  <p className="text-xs text-[#b3b3b3] mt-1">Save your favourite playlists here</p>
+                </div>
+              ) : playlists.length === 0 && !isFetchingPlaylists ? (
+                <div className="flex flex-col items-center text-center py-8">
+                  <p className="text-sm text-[#b3b3b3]">No playlists yet.</p>
+                  <p className="text-xs text-[#b3b3b3]/60 mt-1">Tap + to create one!</p>
+                </div>
+              ) : (
+                playlists.map((playlist) => {
+                  if (!playlist?.id) return null;
+                  const isActive = activePlaylistId === playlist.id;
+                  const isLoading = playlistLoading[playlist.id] ?? false;
+                  return (
+                    <div
+                      key={playlist.id}
+                      className={cn(
+                        'group flex items-center gap-4 px-3 py-3 rounded-xl transition-colors cursor-pointer',
+                        isActive ? 'bg-[#1DB954]/15 border border-[#1DB954]/30' : 'hover:bg-white/5'
+                      )}
+                      onClick={() => !isLoading && handleSelectPlaylist(playlist.id!)}
+                    >
+                      <div className={cn(
+                        'w-12 h-12 rounded-lg flex items-center justify-center shrink-0',
+                        isActive ? 'bg-[#1DB954]/20' : 'bg-[#282828]'
+                      )}>
+                        <Music2 className={cn('w-5 h-5', isActive ? 'text-[#1DB954]' : 'text-[#b3b3b3]')} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={cn('text-sm font-semibold truncate', isActive ? 'text-[#1DB954]' : 'text-white')}>
+                          {isLoading ? <Loader2 className="w-3 h-3 inline mr-1 animate-spin" /> : null}
+                          {playlist.name}
+                        </p>
+                        <p className="text-xs text-[#b3b3b3]">Playlist</p>
+                      </div>
+                      {isActive && <div className="w-2 h-2 rounded-full bg-[#1DB954] shrink-0" />}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-full text-[#b3b3b3] hover:text-red-400 hover:bg-white/10 transition-all shrink-0"
+                            disabled={isLoading}
+                            aria-label="Delete playlist"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-[#282828] border-white/10 mx-4">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-white">Delete playlist?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-[#b3b3b3]">
+                              This will permanently delete "{playlist.name}".
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-transparent border-white/20 text-white hover:bg-white/10">Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeletePlaylist(playlist.id!)}
+                              className="bg-[#1DB954] text-black font-bold hover:bg-[#1ed760] border-none"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
     </>
